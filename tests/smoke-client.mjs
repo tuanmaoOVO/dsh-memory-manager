@@ -38,7 +38,7 @@ let src = fs.readFileSync(clientPath, 'utf8')
 const injectPoint = 'return module.exports; } });'
 if (!src.includes(injectPoint)) throw new Error('注入点未找到')
 src = src.replace(injectPoint,
-  'module.exports.__test = { Panel, PlanTab, LibraryTab, MessagesTab, GraphTab, SaveDialog, ComposeDialog, EditDialog, InputButton, SettingsSection, Boundary, MessageActions, Switch, IconBtn };\n' + injectPoint)
+  'module.exports.__test = { Panel, PlanTab, LibraryTab, MessagesTab, GraphPanel, GraphDetail, SaveDialog, ComposeDialog, EditDialog, SummarizeDialog, InputButton, SettingsSection, Boundary, MessageActions, Switch, IconBtn, JumpReceiver };\n' + injectPoint)
 eval(src)
 if (!factory) throw new Error('factory not captured')
 const mod = factory(requireDsh)
@@ -77,7 +77,7 @@ const cases = [
   ['PlanTab', h(T.PlanTab, { config: sampleCfg, plan: samplePlan, refresh: noop })],
   ['LibraryTab', h(T.LibraryTab, { memories: [sampleMem, sampleMem2], refresh: noop })],
   ['MessagesTab', h(T.MessagesTab, { turns: [sampleTurn], planMemories: [sampleMem], refresh: noop })],
-  ['GraphTab', h(T.GraphTab, { memories: [sampleMem, sampleMem2], refresh: noop })],
+  ['GraphPanel', h(T.GraphPanel, {})],
   ['SaveDialog', h(T.SaveDialog, { messageIds: ['n1'], planMemories: [sampleMem], onClose: () => {}, onDone: () => {} })],
   ['ComposeDialog', h(T.ComposeDialog, { ids: ['m_test1', 'm_test2'], onClose: () => {}, onDone: () => {} })],
   ['EditDialog', h(T.EditDialog, { meta: sampleMem, notes: '标注', snapshot: '快照内容', onClose: () => {}, onDone: () => {} })],
@@ -106,7 +106,7 @@ const btnChecks = [
   ['PlanTab', h(T.PlanTab, { config: sampleCfg, plan: samplePlan, refresh: noop }), ['取消固定', '移除', '恢复']],
   ['LibraryTab', h(T.LibraryTab, { memories: [sampleMem], refresh: noop }), ['刷新', '加入计划', '编辑']],
   ['MessagesTab', h(T.MessagesTab, { turns: [sampleTurn], planMemories: [], refresh: noop }), ['刷新']],
-  ['GraphTab', h(T.GraphTab, { memories: [sampleMem], refresh: noop }), ['刷新']],
+  ['GraphPanel', h(T.GraphPanel, {}), ['全景', '焦点']],
 ]
 for (const [name, el, texts] of btnChecks) {
   try {
