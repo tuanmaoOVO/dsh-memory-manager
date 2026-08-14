@@ -10,10 +10,16 @@
 
 ### 新增 / 变更
 
-- **规约记忆**：记忆可带标注属性，规约类记忆在新会话中**默认自动常驻注入**（`convention` / `会话总结` 类别记忆自动注入；记忆面板可管理注入计划）。
-- 完善「注入式」上下文体系：固定消息 + 勾选记忆 + 单次注入（`injectOnce`）三种方式，记忆模式开启时每次发送自动注入。
-- 前端体验：消息动作条（保存为记忆 / 固定）；设置页自由开关；面板加入「图谱」标签页；错误边界与崩溃自愈；日志链路（Host boot log + client `diag.log` 上报落盘）。
-- Agent 记忆工具（`memory_search` / `memory_recall` / `memory_save` / `memory_pin`）全链路可用，受总开关与工具开关双重门控。
+- **规约记忆（tags）自动注入**：记忆新增 `tags`（分类标签）字段；`tags` 含 `convention` 即规约记忆、含 `会话总结` 即会话总结记忆。配置新增 `autoInjectConvention`（默认 `true`）——开启后每个**新会话默认常驻**启用中的规约记忆与最近 8 条会话总结记忆（`agent/created` 预载计划时按「无对话消息」判定新会话）。
+- **会话总结（session.summarize）**：把所选会话轮次交给 LLM 提炼为「会话id / 轮次 / 用户请求 / 思考链 / 处理链 / 结果」六要素记忆并自动入库；支持「最近 N 轮」范围与「智能合并」（LLM 判断同一事务的连续轮次合并为一条）；消息页 `SummarizeDialog` 提供完整 UI。
+- **记忆级启用开关（enabled 字段）**：记忆可独立启用 / 禁用；`memory.setEnabled` op 与 `memory_set_enabled` 工具维护，禁用后不参与新会话自动注入、不能加入注入计划。
+- **跨工作区会话列表（sessions.list）**：`workspaceRegistry` + `sessionQuery` 枚举全部工作区的会话（含归档标记），供消息页会话选择器与会话总结用。
+- **`session_inject` 工具**：把记忆加入 / 移出当前会话注入计划，会话内按需管理注入内容。
+- **力导向图谱（左侧浮层面板）**：图谱由右侧面板 tab 迁出为**左侧独立浮层**，含**语义分层全景**（按标签着色 + 力导向 160 迭代）与**焦点探索**（径向 1–2 跳邻域）双视图，支持搜索定位 / 缩放 / 平移 / 详情与相关记忆跳转。
+- **消息跳转（JumpReceiver）**：`conversation.session.header.actions` 隐藏接收器，按 `anchorSeq` 在对话中滚动高亮来源消息；跨会话自动切换，最早窗口自动「加载更早」。
+- Agent 记忆工具扩展至 **6 个**（`memory_search` / `memory_recall` / `memory_save` / `memory_set_enabled` / `session_inject` / `memory_pin`），`memory_save` 支持 `tags` / `enabled`。
+- HTTP API op 扩展至 **27 个**（新增 `state.setAutoInject`、`memory.setEnabled`、`session.summarize`、`sessions.list`）。
+- 前端体验：消息动作条（保存为记忆 / 固定）；设置页自由开关（含新会话自动注入开关）；面板头部在图谱浮层打开时可通过「✕」关闭；右侧面板关闭按钮在头部左侧；错误边界与崩溃自愈（含图谱浮层独立兜底）；日志链路（Host boot log + client `diag.log` 上报落盘）。
 
 ## [0.1.0] - 2026
 
