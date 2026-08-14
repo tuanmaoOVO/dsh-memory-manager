@@ -1,0 +1,19 @@
+{
+  "pinned": [
+    {
+      "id": "p_example_1",
+      "role": "pin",
+      "text": "[示例] 每次发送自动注入的固定内容（memory_pin 工具写入）",
+      "at": 1750008000000
+    }
+  ],
+  "memories": [
+    {
+      "id": "m_example_planning",
+      "title": "示例：季度产品规划",
+      "impressions": ["产品规划", "路线图", "示例"]
+    }
+  ],
+  "excluded": [],
+  "injectOnce": false
+}

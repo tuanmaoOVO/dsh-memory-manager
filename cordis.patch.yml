@@ -1,0 +1,4 @@
+# dsh-memory-manager bundle patch: mounts the plugin into a profile layer stack.
+- insert:
+    - id: memory-manager
+      name: '@dsh-external/dsh-memory-manager'
