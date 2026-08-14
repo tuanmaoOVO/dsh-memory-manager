@@ -31,7 +31,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/<your-name>/dsh-memory-manager.git"
+    "url": "https://github.com/tuanmaoOVO/dsh-memory-manager.git"
   },
   "dsh": {
     "bundle": {
