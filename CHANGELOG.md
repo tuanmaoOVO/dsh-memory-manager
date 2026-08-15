@@ -6,11 +6,12 @@
 
 ### 修复 / 变更
 
+- **注入机制重构：`systemPrompt.section` → `agent/pre-step` 消息注入（关键修复）**：极简模式（persona `complete: true`）会让 `assemble()` 丢弃所有其他 sections——此前「注入一次」/记忆注入的内容从未进入该类会话的模型请求（实测：`injectOnce consumed` 有日志，但 `request/header` 的 system 无内容）。现改为在每个请求 step 向 `decision.messages` 末尾追加一条 `form: 'snapshot'` 的 plugin 消息（同 DSH time-context 机制，UI 折叠显示、模型可见），与 complete section / `includeRuntimeContext` 均无关，任何会话形态都生效。
 - **一次性注入改为全局队列（跟随「下一次发送」）**：`plan.injectOnceMemory` 不再绑定点击时的会话——队列全局存储，**任何会话**的第一次请求都会注入并自动清除（旧版按会话分键的 once.json 自动迁移合并）。修复：点击后切换到其他会话发送时注入不生效的问题。
 - **UI 反馈修复**：记忆库页点「注入一次」后立即刷新（计划页马上可见队列）；切换到计划页时也刷新数据，不再需要来回切换页面。
 - **标签对比度**：「一次性」/「自动」标签改为实心绿底白字，浅色背景下清晰可辨。
 - **注入可验证**：boot log 新增 `injectOnce consumed: session=... chars=... parts=...` 行，便于确认注入内容确实进入请求上下文。
-- 文档同步：HTTP op 全表 27 → 28（新增 `plan.injectOnceMemory` / `session.injectNow`）。
+- 文档同步：HTTP op 全表 27 → 28（新增 `plan.injectOnceMemory` / `session.injectNow`）；注入机制章节更新。
 
 ## [0.2.0] - 2026
 

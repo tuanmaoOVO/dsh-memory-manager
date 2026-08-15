@@ -116,21 +116,25 @@
 
 ---
 
-## 3. 系统提示注入段
+## 3. 注入机制（agent/pre-step 消息注入）
 
 | 属性 | 值 |
 |---|---|
-| `name` | `memory-manager:context` |
-| `order` | `300` |
-| `text` | 按组装时 agent id 取会话计划渲染；会话激活（`mode==='on'` 或 `injectOnce`）时输出注入段，否则返回空字符串 |
+| 事件 | `agent/pre-step`（`prepend: true`） |
+| 消息 `name` | `memory-manager:context`（source 的 sections 标记） |
+| 消息形式 | `form: 'snapshot'` 的 plugin 消息（`source: { kind: 'plugin', plugin: 'dsh-memory-manager' }`），追加到请求消息末尾，UI 折叠显示（同 DSH time-context），模型可见 |
+| 渲染 | 每个请求 step 组装一次；会话激活（`mode==='on'` 或 `injectOnce` 或一次性队列非空）时输出注入文本，否则跳过 |
 
-注入段包裹格式：
+> **为什么不用 `systemPrompt.section`**：极简模式（persona `complete: true`）会让 `assemble()` 丢弃所有其他 sections，注入内容从未进入模型请求（2026-08-15 实测修复）。`agent/pre-step` 消息注入与 complete section、`includeRuntimeContext` 均无关，任何会话形态都生效。
+
+注入文本包裹格式：
 
 ```
 === 记忆库上下文（用户指定，供参考；非当前对话的实时内容） ===
 [固定消息 ·<role>] ...
 【记忆·<标题>】正文...
 【会话总结·自动注入】...（会话总结记忆自动注入时的独立标注）
+【一次性注入·<标题>】...（一次性注入记忆）
 === 记忆库上下文结束 ===
 ```
 

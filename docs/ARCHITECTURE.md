@@ -22,7 +22,7 @@
  │  │   pinned/<sid>.json  per-session 注入计划 (planCache)          │  │
  │  ├────────────────────────────────────────────────────────────────┤  │
  │  │ 6 个 Agent 工具: search/recall/save/set_enabled/inject/pin     │  │
- │  │ 注入段: systemPrompt.section (memory-manager:context, order300)│  │
+ │  │ 注入: agent/pre-step 消息注入 (memory-manager:context, snapshot) │  │
  │  │ 会话总结: session.summarize → summaryMemories → 自动注入       │  │
  │  │ 事件: agent/created 预载计划 + 新会话判定(自动注入规约/总结)     │  │
  │  │ 启动即 scanLibrary()                                          │  │
@@ -146,7 +146,8 @@
 
 ## 注入机制
 
-- **注入段**：注册 `systemPrompt.section({ name: 'memory-manager:context', order: 300, text })`。组装系统提示时，`text()` 按当前组装上下文的 agent id 取该会话计划并渲染内容；不加记忆则以空字符串跳过（不污染提示）。
+- **注入消息（agent/pre-step）**：注册 `agent/pre-step` 监听（`prepend: true`），在每个请求 step 组装后向 `decision.messages` 末尾追加一条 `form: 'snapshot'` 的 plugin 消息（`source: { kind: 'plugin', plugin: 'dsh-memory-manager' }`，UI 折叠显示同 time-context，模型可见）。`renderContextFor(sessionId)` 按请求会话 id 渲染内容；无内容则跳过（不污染请求）。
+  - **为什么不用 `systemPrompt.section`**：极简模式（persona `complete: true`）会让 `assemble()` 仅保留 complete section、丢弃所有其他 sections，注入内容从未进入模型请求（2026-08-15 实测：`injectOnce consumed` 有日志但 `request/header` 的 system 无内容）。消息注入与 complete section、`includeRuntimeContext` 均无关，任何会话形态都生效。
 - **按会话 plan**：仅渲染 `cfg.mode === 'on'` 或 `plan.injectOnce === true` 时激活。`injectOnce` 单次注入后自动置回 `false` 并持久化。
 - **预算分配（字符上限）**：
   1. 先分配固定消息，上限 `min(pinChars, totalChars)`；每条 `[固定消息 ·role] <text>`，超长截断。
