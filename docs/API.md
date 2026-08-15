@@ -31,7 +31,7 @@
 
 - **总开关门控**：`enabled === false` 时，除 `state.get` / `state.setEnabled` / `diag.log` 外，所有 op 均返回 `{ error: '记忆管理已禁用（设置 → 记忆管理 中开启）' }`。
 
-### op 全表（共 28 个）
+### op 全表（共 29 个）
 
 > 以下清单与 `lib/index.js` 的 `handler` `switch` 逐一核对。`memory.save` 会生成 id `m_<随机>`；各写入 op 返回一条完整记忆元数据 `meta`。
 

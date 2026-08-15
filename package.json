@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-memory-manager",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "DSH 记忆管理插件（宿主级）：文件夹记忆库、印象、组合与双向链接、上下文计划注入、规约记忆与最近会话总结的新会话自动注入、会话总结、跨工作区会话列表、6 个 Agent 记忆工具、左侧图谱双视图浮层与消息跳转，设置页自由开关。",
   "type": "module",
   "main": "lib/index.js",

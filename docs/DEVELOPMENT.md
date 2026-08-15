@@ -27,7 +27,7 @@ dsh-memory-manager/
 - 入口导出 `name` / `inject` / `apply` / `Config`。`inject = ['settings', 'tools', 'systemPrompt']` 声明硬依赖（属性访问必须 inject 声明，否则 Cordis 抛 `cannot get property ... without inject`）。`Config` 含 `autoInjectConvention`（新会话自动注入规约 / 会话总结，默认 `true`）。
 - **关键实现**：
   - settings 命名空间 `memory-manager`，`applies:'live'`；`node:fs/promises` 直读记忆库（不依赖 `ctx.fs`，宿主根下 fs 服务不可见）。
-  - HTTP 路由 `/_dsh/memory-manager/api` 走 `webServer` 服务（`ctx.inject(['webServer'], cb)` + `webCtx.effect`，服务出现才注册）。**服务名是 `webServer`，不是 httpServer**。当前共 **27 个 op**（`state.*`8 / `sessions.list` / `library.scan` / `memory.*`8 / `session.*`4 / `plan.*`4 / `diag.log`）。
+  - HTTP 路由 `/_dsh/memory-manager/api` 走 `webServer` 服务（`ctx.inject(['webServer'], cb)` + `webCtx.effect`，服务出现才注册）。**服务名是 `webServer`，不是 httpServer**。当前共 **29 个 op**（`state.*`8 / `sessions.list` / `library.scan` / `memory.*`8 / `session.*`5 / `plan.*`5 / `diag.log`）。
   - 会话读取：`liveSession`（`ctx.get('sessions')`）优先，否则用 `sessionQuery.readSession` + `foldSurface` 只读 surface。
   - **规约记忆自动注入**：`agent/created`（`global:true`）预载计划时，按 `isNewSession`（无 `user/message` / `assistant/message` 事件才算新会话）判定，把启用中的规约记忆（`tags` 含 `convention`）与最近 8 条会话总结记忆（`tags` 含 `会话总结`）并入新会话计划。
   - **会话总结**：`session.summarize` op 用 LLM 提炼六要素，`extractJson` 稳健抽取 JSON，`merge` 时先 `groupSameTransactions` 分组；结果自动入库并成为会话总结记忆。

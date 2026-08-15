@@ -195,7 +195,7 @@
 - **端点**：`/_dsh/memory-manager/api`，由 `webServer` 服务注册（`ctx.inject(['webServer'], webCtx => webCtx.webServer.register({ kind:'exact', path, handler }))`）。
 - **GET**：探测 —— `{ ok:true, service:'memory-manager', enabled }`。
 - **POST**：请求体为 JSON 信封 `{ op, sessionId?, args? }`；响应统一为 `{ ok, value }`（业务错误时 `ok:false`，`value.error` 为错误说明），HTTP 400 为坏 JSON、405 为方法不支持、500 为服务器异常。请求体上限 256 KiB。
-- **op 清单（共 27 个）**：完整参考见 [docs/API.md](docs/API.md)。按域名归类：`state.*`（8，含 `state.setAutoInject`）、`sessions.list`（1）、`library.*`（1）、`memory.*`（8，含 `memory.setEnabled`）、`session.*`（4，含 `session.summarize`）、`plan.*`（4）、`diag.log`（1）。
+- **op 清单（共 29 个）**：完整参考见 [docs/API.md](docs/API.md)。按域名归类：`state.*`（8，含 `state.setAutoInject`）、`sessions.list`（1）、`library.*`（1）、`memory.*`（8，含 `memory.setEnabled`）、`session.*`（5，含 `session.summarize` / `session.injectNow`）、`plan.*`（5，含 `plan.injectOnceMemory`）、`diag.log`（1）。
 
 ## Client 插槽与面板结构
 
