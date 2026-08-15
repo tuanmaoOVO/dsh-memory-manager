@@ -39,7 +39,7 @@
 
 | op | args | 返回要点 |
 |---|---|---|
-| `state.get` | 可选 `sessionId` | `{ config, plan }`。`config`：`{ enabled, mode, view, modelTools, libraryPath, ready, reason, memoryChars, totalChars, pinChars, autoInjectConvention }`；有 `sessionId` 时额外返回该会话的 `plan`（`{ pinned, memories, excluded, once, injectOnce }`，pinned/memories 为摘要，`memories` 含 `tags`，`once` 为待一次性注入队列） |
+| `state.get` | 可选 `sessionId` | `{ config, plan }`。`config`：`{ enabled, mode, view, modelTools, libraryPath, ready, reason, memoryChars, totalChars, pinChars, autoInjectConvention }`；有 `sessionId` 时额外返回该会话的 `plan`（`{ pinned, memories, excluded, once, injectOnce }`，pinned/memories 为摘要，`memories` 含 `tags`，`once` 为**全局**待一次性注入队列） |
 | `state.setEnabled` | `{ v: boolean }` | `{ ok, enabled }`。写回设置，live 生效 |
 | `state.setMode` | `{ mode: 'on'\|'off' }` | `{ ok, mode }`。`on` = 临时记忆模式（每次发送自动注入） |
 | `state.setView` | `{ view: 'full'\|'compact' }` | `{ ok, view }`。注入视图（全文 / 紧凑） |
@@ -90,7 +90,7 @@
 | `plan.addMemory` | `{ id: string }`，需 `sessionId` | `{ ok }`。把一条记忆加入会话注入计划（去重；已禁用的记忆会拒绝） |
 | `plan.removeMemory` | `{ id: string }`，需 `sessionId` | `{ ok }`。从计划移除记忆 |
 | `plan.injectOnce` | `{ v: boolean }`，需 `sessionId` | `{ ok }`。开启后下一次发送注入一次，随后自动关闭 |
-| `plan.injectOnceMemory` | `{ id: string, cancel?: boolean }`，需 `sessionId` | `{ ok, onceCount }`。把一条记忆加入**当前所在会话**的一次性注入队列（不入全局计划；下一次请求渲染后自动清除）。`cancel=true` 时从队列移除（不校验记忆是否存在） |
+| `plan.injectOnceMemory` | `{ id: string, cancel?: boolean }`，`sessionId` 可选 | `{ ok, onceCount }`。把一条记忆加入**全局一次性注入队列**（不入全局计划；**任何会话**的第一次请求渲染后自动清除，跟随「下一次发送」而非点击时会话）。`cancel=true` 时从队列移除（不校验记忆是否存在） |
 | `plan.excludeTurn` | `{ turnId: string, exclude?: boolean(默认true) }`，需 `sessionId` | `{ ok }` 或错误。`exclude=true` 排除该轮次（非破坏）；`exclude=false` 恢复。**需要可写 live 会话**；不能排除当前最新一轮 |
 
 #### diag.* —— 诊断（1）
