@@ -31,7 +31,7 @@
 
 - **总开关门控**：`enabled === false` 时，除 `state.get` / `state.setEnabled` / `diag.log` 外，所有 op 均返回 `{ error: '记忆管理已禁用（设置 → 记忆管理 中开启）' }`。
 
-### op 全表（共 27 个）
+### op 全表（共 28 个）
 
 > 以下清单与 `lib/index.js` 的 `handler` `switch` 逐一核对。`memory.save` 会生成 id `m_<随机>`；各写入 op 返回一条完整记忆元数据 `meta`。
 
@@ -39,7 +39,7 @@
 
 | op | args | 返回要点 |
 |---|---|---|
-| `state.get` | 可选 `sessionId` | `{ config, plan }`。`config`：`{ enabled, mode, view, modelTools, libraryPath, ready, reason, memoryChars, totalChars, pinChars, autoInjectConvention }`；有 `sessionId` 时额外返回该会话的 `plan`（`{ pinned, memories, excluded, injectOnce }`，pinned/memories 为摘要，`memories` 含 `tags`） |
+| `state.get` | 可选 `sessionId` | `{ config, plan }`。`config`：`{ enabled, mode, view, modelTools, libraryPath, ready, reason, memoryChars, totalChars, pinChars, autoInjectConvention }`；有 `sessionId` 时额外返回该会话的 `plan`（`{ pinned, memories, excluded, once, injectOnce }`，pinned/memories 为摘要，`memories` 含 `tags`，`once` 为待一次性注入队列） |
 | `state.setEnabled` | `{ v: boolean }` | `{ ok, enabled }`。写回设置，live 生效 |
 | `state.setMode` | `{ mode: 'on'\|'off' }` | `{ ok, mode }`。`on` = 临时记忆模式（每次发送自动注入） |
 | `state.setView` | `{ view: 'full'\|'compact' }` | `{ ok, view }`。注入视图（全文 / 紧凑） |
@@ -73,7 +73,7 @@
 | `memory.related` | `{ id, depth?(默认2,1–4), limit?(默认30,1–100) }` | `{ related: [{ id, title, impressions, distance }] }`。BFS 链式回忆（links + backlinks） |
 | `memory.suggest` | `{ content: string }`（≤8000 字） | `{ impressions: string[] }` 或 `{ error }`。LLM 生成 2–6 个印象建议 |
 
-#### session.* —— 会话相关（4）
+#### session.* —— 会话相关（5）
 
 | op | args | 返回要点 |
 |---|---|---|
@@ -81,14 +81,16 @@
 | `session.summarize` | `{ recent?(默认0=全部,0–100), merge? }`，需 `sessionId` | `{ summaries: [...], count }`。把所选会话轮次交给 LLM 提炼为「会话id / 轮次 / 用户请求 / 思考链 / 处理链 / 结果」六要素记忆，**逐条自动入库**（`tags` 含 `会话总结`，新会话默认自动注入最近 8 条）。`merge=true` 时 LLM 判断同一事务的连续轮次合并为一条；`recent=N` 仅总结最近 N 轮。LLM 不可用时明确报错，不落库 |
 | `session.saveAsMemory` | `{ messageIds: string[], title?, impressions?, tags?, notes?, links? }`，需 `sessionId` | 返回新记忆 `meta`。把所选消息（用户/助手/工具结果）组合为记忆正文 |
 | `session.pin` | `{ messageIds: string[], pin: boolean }`，需 `sessionId` | `{ ok, pinned: [...] }`。`pin=false` 取消固定；`pin=true` 追加固定消息（去重） |
+| `session.injectNow` | `{ id: string }`，需 `sessionId` | `{ ok }` 或错误。把记忆注入**当前所在会话**的模型上下文（`Agent.inject`，不显示为对话消息），并立即唤醒模型基于它继续响应 |
 
-#### plan.* —— 注入计划（4）
+#### plan.* —— 注入计划（5）
 
 | op | args | 返回要点 |
 |---|---|---|
 | `plan.addMemory` | `{ id: string }`，需 `sessionId` | `{ ok }`。把一条记忆加入会话注入计划（去重；已禁用的记忆会拒绝） |
 | `plan.removeMemory` | `{ id: string }`，需 `sessionId` | `{ ok }`。从计划移除记忆 |
 | `plan.injectOnce` | `{ v: boolean }`，需 `sessionId` | `{ ok }`。开启后下一次发送注入一次，随后自动关闭 |
+| `plan.injectOnceMemory` | `{ id: string, cancel?: boolean }`，需 `sessionId` | `{ ok, onceCount }`。把一条记忆加入**当前所在会话**的一次性注入队列（不入全局计划；下一次请求渲染后自动清除）。`cancel=true` 时从队列移除（不校验记忆是否存在） |
 | `plan.excludeTurn` | `{ turnId: string, exclude?: boolean(默认true) }`，需 `sessionId` | `{ ok }` 或错误。`exclude=true` 排除该轮次（非破坏）；`exclude=false` 恢复。**需要可写 live 会话**；不能排除当前最新一轮 |
 
 #### diag.* —— 诊断（1）

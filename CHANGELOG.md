@@ -4,7 +4,11 @@
 
 ## [Unreleased]
 
-（留空，供下一次迭代填写。）
+### 修复 / 变更
+
+- **一次性注入修复与队列可视化**：`plan.injectOnceMemory` 支持 `cancel:true` 从队列移除；「计划」页新增「待一次性注入」队列（数量 + 逐条取消）；修复计划页 / 消息页多处 React 列表 key 警告。
+- **直接注入（`session.injectNow`）**：把记忆注入当前所在会话的**模型上下文**（`Agent.inject` + `Agent.steer`），不显示为对话消息，立即唤醒模型基于它响应。
+- 文档同步：HTTP op 全表 27 → 28（新增 `plan.injectOnceMemory` / `session.injectNow`）。
 
 ## [0.2.0] - 2026
 
