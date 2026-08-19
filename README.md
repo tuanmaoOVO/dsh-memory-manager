@@ -30,7 +30,7 @@
 
 ## 安装与挂载
 
-请参阅 [docs/INSTALL.md](docs/INSTALL.md) —— 简要而言，把本包放入 DSH profile 的 `node_modules`，在 profile 的 `package.json` 的 `dsh.profile.bundles` 中登记 bundle（通过包内 `cordis.patch.yml` 以 `insert` 方式挂载进 profile 层栈），重启 DSH 即可。
+请参阅 [docs/INSTALL.md](docs/INSTALL.md) —— 简要而言，在 DSH 所在环境执行 `dsh plugin --profile <profile名> add file:<本仓库路径>` 即可（Windows 示例：`file:D:/dshTools/dsh-memory-manager`；WSL 示例：`file:/mnt/d/dshTools/dsh-memory-manager`）。插件通过包内 `cordis.patch.yml` 以 `insert` 方式挂载进 profile 层栈，重启 DSH 即可。
 
 ## 快速开始
 

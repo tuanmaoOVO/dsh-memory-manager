@@ -8,6 +8,22 @@
 
 - 仓库新增 `CONVENTIONS.md`（委派-验证-复盘闭环规约 v4 详情）；README 新增「使用规约记忆」章节，说明把规约保存为规约记忆（`tags` 含 `convention`）并「加入计划」后的自动注入流程。
 
+## [0.3.1] - 2026
+
+### 修复
+
+- **跨平台调试日志路径**：boot / client 日志不再硬编码 `C:/Users/...`，改为写入 DSH 主目录（`$DSH_HOME` 或 `~/.dsh`），Windows / Linux / WSL 均可用。
+
+### 变更（安装体验）
+
+- **`schemastery` 移入 `dependencies`**：插件运行时直接 import 的 `schemastery` 此前仅声明为 peer，导致每个 profile 安装后还需手动补装；现作为运行时依赖随插件自动安装，`dsh plugin --profile <name> add file:<路径>` 一次完成。
+- **peer 依赖全部标记 optional**：`@deepseek-ai/dsh-*`、`cordis`、`react` 由 DSH 宿主提供，标记 optional 后 pnpm 安装不再产生 "Issues with peer dependencies" 警告。
+- 新增 `packageManager: pnpm@11.7.0` 字段，便于 corepack 自动选用。
+
+### 文档
+
+- 新增 `docs/INSTALL.md`（此前 README 引用但文件缺失）：Windows / WSL 安装、更新、卸载与验证命令。
+
 ## [0.3.0] - 2026
 
 ### 修复

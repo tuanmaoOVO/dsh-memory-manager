@@ -1,8 +1,9 @@
 {
   "name": "@dsh-external/dsh-memory-manager",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "DSH 记忆管理插件（宿主级）：文件夹记忆库、印象、组合与双向链接、上下文计划注入、规约记忆与最近会话总结的新会话自动注入、会话总结、跨工作区会话列表、6 个 Agent 记忆工具、左侧图谱双视图浮层与消息跳转，设置页自由开关。",
   "type": "module",
+  "packageManager": "pnpm@11.7.0",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
@@ -46,6 +47,9 @@
       "platform": "web"
     }
   },
+  "dependencies": {
+    "schemastery": "^3.18.0"
+  },
   "peerDependencies": {
     "@deepseek-ai/dsh-agent": "^0.0.1",
     "@deepseek-ai/dsh-client-runtime": "^0.0.1",
@@ -59,8 +63,22 @@
     "@deepseek-ai/dsh-system-prompt": "^0.0.1",
     "@deepseek-ai/dsh-tools": "^0.0.1",
     "cordis": "^4.0.0-rc.7",
-    "react": "^18.2.0",
-    "schemastery": "^3.18.0"
+    "react": "^18.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-agent": { "optional": true },
+    "@deepseek-ai/dsh-client-runtime": { "optional": true },
+    "@deepseek-ai/dsh-client-ui-settings": { "optional": true },
+    "@deepseek-ai/dsh-client-ui-slots": { "optional": true },
+    "@deepseek-ai/dsh-fs": { "optional": true },
+    "@deepseek-ai/dsh-host-webserver": { "optional": true },
+    "@deepseek-ai/dsh-sandbox-policy": { "optional": true },
+    "@deepseek-ai/dsh-session": { "optional": true },
+    "@deepseek-ai/dsh-settings": { "optional": true },
+    "@deepseek-ai/dsh-system-prompt": { "optional": true },
+    "@deepseek-ai/dsh-tools": { "optional": true },
+    "cordis": { "optional": true },
+    "react": { "optional": true }
   },
   "license": "MIT"
 }
