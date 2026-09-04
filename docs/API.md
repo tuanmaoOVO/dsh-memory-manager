@@ -8,6 +8,13 @@
 
 ### 端点与信封
 
+插件对外暴露 **双通道**（同一业务层 `handler`、同一 `{op, sessionId, args}` 协议）：
+
+- **兼容通道**（始终可用）：`/_dsh/memory-manager/api`，由 `ctx.webServer.register({ kind: 'exact', ... })` 注册。
+- **标准通道**（`ctx.connection` 存在时自动注册）：`/api/memory-manager/<op>`，经 `ctx.connection.rpc.intercept('/api', ...)` 拦截，带 DSH 连接层的同源鉴权（Host/Origin 护栏 + 浏览器会话）。
+
+客户端默认使用兼容通道（同源 `fetch` 直接可用）；两端均返回相同响应契约。
+
 - **端点**：`/_dsh/memory-manager/api`
 - **GET**：探测服务是否在线。响应：
 

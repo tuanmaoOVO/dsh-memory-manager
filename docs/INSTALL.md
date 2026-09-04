@@ -29,17 +29,21 @@ dsh plugin --profile web add file:/mnt/d/dshTools/dsh-memory-manager
       name: '@dsh-external/dsh-memory-manager'
 ```
 
-> **依赖说明**：`schemastery` 是插件的**运行时依赖**（v0.3.1 起），会随插件自动安装，无需手动补装；`@deepseek-ai/dsh-*`、`react`、`cordis` 由 DSH 宿主提供，插件不重复安装。
+> **依赖说明**：`schemastery` 是插件的**运行时依赖**（v0.3.1 起），会随插件自动安装，无需手动补装；`@deepseek-ai/dsh-*`、`react`、`cordis` 由 DSH 宿主提供，插件不重复安装（peer 全部 optional）。v0.4.0 只 import `@deepseek-ai/dsh-tools`（不可用时自动回退内置等价实现）与 `schemastery`，其余 DSH 服务全部经 `ctx.get` 可选读取。
+
+> **版本兼容（v0.4.0+）**：面向 **DSH 0.1.2-rc.1+**。客户端半区由 DSH 客户端模块系统按 `dsh.client` 声明自动发现；无需手动注册任何 client 包。若配置文件出现 `cannot resolve profile bundle` 或浏览器模块图报错，请确认安装输出中 `dsh.profile.bundles` 已包含本插件（`dsh plugin add` 会自动对账）。
 
 安装完成后 **重启 DSH**（`dsh web`）即可生效。
 
 ## 更新
 
-`file:` 目录依赖下，插件代码改动**即时生效**（下次启动 DSH 即使用新代码）。仅当插件的 `package.json` 依赖声明发生变化时，需要在 profile 目录刷新锁文件：
+**开发迭代（推荐 `link:`）**：以 `link:` 形式安装会把 profile 的依赖链接到本仓库，插件代码改动**即时生效**（下次启动 DSH 即使用新代码；仅当 `package.json` 依赖声明变化时，在 profile 目录执行 `dsh plugin --profile web install` 刷新锁文件）：
 
 ```bash
-dsh plugin --profile web install
+dsh plugin --profile web add link:D:/dshTools/dsh-memory-manager
 ```
+
+**发布安装（`file:`）**：`file:` 形式会由 pnpm 把插件**拷贝**进依赖树（不可变），因此代码改动后需重新执行一次 `add` 才会同步；若提示 `Already up to date`，先 `dsh plugin --profile web remove @dsh-external/dsh-memory-manager` 再 `add`，或改用 `link:`。
 
 ## 卸载
 

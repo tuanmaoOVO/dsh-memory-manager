@@ -8,6 +8,26 @@
 
 - 仓库新增 `CONVENTIONS.md`（委派-验证-复盘闭环规约 v4 详情）；README 新增「使用规约记忆」章节，说明把规约保存为规约记忆（`tags` 含 `convention`）并「加入计划」后的自动注入流程。
 
+## [0.4.0] - 2026
+
+### 重要：适配新版本 DSH（0.1.2-rc.1+）的标准化重写
+
+- **解决与新版 DSH 的冲突**：旧版 `dsh.client.inject` 引用的 `@deepseek-ai/dsh-client-runtime` 已在新版 DSH 中移除，导致浏览器模块图扫描失败、页面无法启动；旧 Host 侧依赖的若干服务名 / 事件载荷也已演进。0.4.0 按新版 DSH 实际代码（`packages/**`）与官方文档思想重写全部集成面。
+- **Host 半区模块化**：`lib/index.js` 拆为职责单一模块 —— `util`（零 DSH 依赖）/ `memory`（记忆库文件层）/ `plan`（计划 / 自动注入 / 注入渲染）/ `sessions`（会话读取 / 轮次构建 / 排除恢复）/ `llm`（印象建议 / 智能合并 / 会话总结）/ `tools`（6 个记忆工具）/ `api`（HTTP + RPC 双通道）。
+- **只依赖核心扩展点，其余全部自实现**：不再依赖任何官方插件包（`session-title-llm`、`session-query-sqlite`、`storage`、`fs` 等一律不依赖）。
+  - 会话读取：优先 live `ctx.sessions`，只读回退 `ctx.sessionQuery.readSurface`；两者皆缺失时相关能力降级。
+  - 会话总结：直接调用 `ctx.llm.stream` + `ctx.agentDefaultModel.currentSelection()`，逻辑自包含。
+  - 记忆库 / 计划 / 排除：`node:fs` 直接读写，与 DSH 会话存储完全隔离。
+- **工具定义容错**：优先使用官方 `@deepseek-ai/dsh-tools` 的 `defineTool`；若未来该导出不可用，回退到内置等价实现（产出 JSON-Schema 形状一致），工具注册永不因官方升级而阻断。
+- **client 模块图修复**：`dsh.client.inject` 改为新版行名（`dsh-client-ui-renderer` / `-conversation` / `-chat` / `-layout` / `-settings-general` / `dsh-api-session-controller`），保证插槽声明先于注册到达与 `ctx.sessions` 可用；`lib/client.js` 自身与新版插槽系统（SlotMap / `ctx.slots.inject` + `register`）完全兼容，未改动。
+- **API 双通道**：除 `/_dsh/memory-manager/api` 兼容路径外，新增 `ctx.connection.rpc.intercept('/api', 'memory-manager/<op>', ...)` 标准通道（存在时自动注册，带连接层鉴权）。
+- **peer 依赖收窄**：仅保留实际 import 的 `@deepseek-ai/dsh-tools` 与 `react`（均 optional），删除全部不再使用的 `@deepseek-ai/dsh-*` peer 声明；`schemastery` 仍为运行时依赖。
+- 配置字段、记忆文件格式、HTTP op 协议与 0.3.x 完全兼容（记忆库 / 计划数据可直接沿用）。
+
+### 文档
+
+- `docs/ARCHITECTURE.md` 重写为新版模块结构与双通道架构；`docs/API.md` / `docs/INSTALL.md` / `docs/DEVELOPMENT.md` 同步新版 DSH 依赖与测试指引；README 新增「兼容性」章节。
+
 ## [0.3.1] - 2026
 
 ### 修复

@@ -26,11 +26,26 @@
 
 ## 架构一句话
 
-插件是宿主级（Host）插件：`lib/index.js` 为 Host 半区（ESM，注册 settings / 工具 / 注入段 / HTTP API / 事件），`lib/client.js` 为浏览器 Client 半区 bundle（`window.__ModuleLoader__.load` 包裹的 CJS），两者通过 HTTP 端点 `/_dsh/memory-manager/api`，以 `{op, sessionId, args}` JSON 信封通信；Host 端 `agent/created` 预载计划并对新会话自动注入规约 / 会话总结记忆，Client 端 6 个插槽驱动右侧面板、左侧图谱浮层、消息跳转与设置页。
+插件是宿主级（Host）插件：`lib/` 按职责分模块（`index` 装配 / `memory` 记忆库 / `plan` 计划 / `sessions` 会话 / `llm` 摘要 / `tools` 工具 / `api` 接口 / `util` 工具），只依赖 DSH 核心扩展点（`settings.register` / `tools.register` / `agent/pre-step`、`agent/created` / `webServer`），记忆库、注入计划、轮次排除、会话总结与图谱数据全部自实现，**不依赖任何官方插件包**。客户端 `lib/client.js` 为标准 `window.__ModuleLoader__.load({ id, factory })` 浏览器 bundle，经 `dsh.client` 声明由 DSH 客户端模块系统自动发现；两端通过 `/_dsh/memory-manager/api`（JSON 信封 `{op, sessionId, args}`）通信，存在 `ctx.connection` 时同时注册 `/api/memory-manager/<op>` 标准通道。
+
+## 兼容性（跨版本适配策略）
+
+0.4.0 面向 **DSH 0.1.2-rc.1+**（按实际源码验证），并对官方升级做了隔离设计：
+
+| 集成面 | 策略 |
+|---|---|
+| 设置 / 工具 / 注入 / `webServer` | 只用核心服务与事件，`ctx.get` 可选探测，缺失即降级（如工具不注册、注入不激活），不阻断启动 |
+| 会话读取 | 优先 live `ctx.sessions`，回退 `ctx.sessionQuery.readSurface`；不再依赖 `foldSurface` 等内部 API |
+| LLM | 直接调 `ctx.llm.stream` + `ctx.agentDefaultModel.currentSelection()` —— 会话总结 / 印象建议自包含 |
+| 记忆库 / 计划 / 排除 | `node:fs` 纯文件层（`.dsh-memory`），与 DSH 存储完全隔离 |
+| 客户端 | 只用新版本仍在的插槽（`conversation.input.left` / `session.header.actions` / `shell.overlay` / `settings.section` / `chat.assistant-actions`）与标准 props（`sessionId` / `useSession` / `useSessions`） |
+| 工具定义 | 优先 `defineTool`，`@deepseek-ai/dsh-tools` 不可用时回退内置等价实现（形状一致） |
+
+> 目标：官方 DSH 升级到下一个小版本时，插件最坏情况是「个别能力降级」，而不是「页面无法启动 / 插件加载失败」。
 
 ## 安装与挂载
 
-请参阅 [docs/INSTALL.md](docs/INSTALL.md) —— 简要而言，在 DSH 所在环境执行 `dsh plugin --profile <profile名> add file:<本仓库路径>` 即可（Windows 示例：`file:D:/dshTools/dsh-memory-manager`；WSL 示例：`file:/mnt/d/dshTools/dsh-memory-manager`）。插件通过包内 `cordis.patch.yml` 以 `insert` 方式挂载进 profile 层栈，重启 DSH 即可。
+请参阅 [docs/INSTALL.md](docs/INSTALL.md) —— 简要而言，在 DSH 所在环境执行 `dsh plugin --profile <profile名> add file:<本仓库路径>` 即可（Windows 示例：`file:D:/dshTools/dsh-memory-manager`；WSL 示例：`file:/mnt/d/dshTools/dsh-memory-manager`；开发迭代推荐 `link:<路径>`，改动即生效）。插件通过包内 `cordis.patch.yml` 以 `insert` 方式挂载进 profile 层栈，重启 DSH 即可。
 
 ## 快速开始
 
