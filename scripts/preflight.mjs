@@ -155,6 +155,27 @@ if (!checkout) {
   check('DSH 检出路径存在', false, checkout)
 } else {
   check('DSH 检出路径存在', true, checkout)
+
+  // 用 DSH **自己的准入校验**（app-boot 的 evaluatePluginCompatibility）判定：
+  // 它在装载 profile 时对每个 bundle 的 @deepseek-ai/dsh-* peer 调用的就是这一段。
+  // 需要该检出已构建 packages/boot/app-boot/lib/index.js。
+  const appBoot = `${checkout}/packages/boot/app-boot/lib/index.js`
+  if (!existsSync(appBoot)) {
+    skip('peer 兼容性（DSH 权威校验）', `${appBoot} 不存在（先在该检出 pnpm run build:lib:host）`)
+  } else {
+    try {
+      const boot = await import(pathToFileURL(appBoot).href)
+      const runtime = boot.getDshRuntimeVersion()
+      const issue = boot.evaluatePluginCompatibility(pkg, {}, runtime)
+      check(`DSH ${runtime} 的准入校验放行本插件（evaluatePluginCompatibility 返回 undefined）`,
+        issue === undefined,
+        issue ? `不满足的 peer: ${JSON.stringify(issue.peers)}` : '')
+      console.log(`       运行版本：${runtime}（对照来源 ${checkout}）`)
+    } catch (error) {
+      check('DSH 权威准入校验可执行', false, String((error && error.message) || error))
+    }
+  }
+
   const pkgPathOf = (name) => {
     if (name.startsWith('@deepseek-ai/dsh-client-')) return `${checkout}/packages/client/${name.slice('@deepseek-ai/dsh-client-'.length)}`
     if (name.startsWith('@deepseek-ai/dsh-api-')) return `${checkout}/packages/api/${name.slice('@deepseek-ai/dsh-api-'.length)}`

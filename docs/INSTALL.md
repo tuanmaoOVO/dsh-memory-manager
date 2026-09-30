@@ -15,14 +15,14 @@ node scripts/preflight.mjs "D:/deepseekagent/version0.2.0-rc.1/deepseek-harness"
 # 或：DSH_ROOT=<DSH 检出路径> npm run preflight
 ```
 
-30 项检查，把「装上后不影响 DSH 本体」变成机械结论（下面是它的检查面，也是本插件的安全边界）：
+**31 项**检查，把「装上后不影响 DSH 本体」变成机械结论（下面是它的检查面，也是本插件的安全边界）。带上检出路径时，它会用 **DSH 自己的准入校验**（`packages/boot/app-boot` 的 `evaluatePluginCompatibility`）跑一遍，并打印对照到的运行版本（例如 `0.2.0-rc.2`）——与 DSH 装载 profile 时对每个 bundle 做的是同一段判定：
 
 | 组 | 保证 | 检查项 |
 |---|---|---|
 | A 包自洽 | 装上去能跑，不会因为缺文件把宿主的客户端模块图整体搞坏 | `dsh.bundle.patch` 存在；`exports["."]` / `exports["./client"]` 指向的文件都存在；`files` 白名单覆盖这些文件；运行时依赖已声明；**未声明 `dsh.profile`**（永远不能充当或替换 profile 组合） |
 | B 只增不改 | 只影响自己这一行，不动 profile 里的其它行 | bundle patch **只用 `insert`**（无 `remove` / `replace`）；插入行 `id: memory-manager` + `name` 等于本包名，不覆盖任何既有 id；未预设 `disabled`；所有 DSH peer 都是 **optional**（版本不匹配时只会拒绝本 bundle，不会波及其它行） |
 | C 模块与 bundle 形状 | 插件自己的代码出问题，只让插件不可用 | 宿主模块可 import、`inject` 只声明核心服务（缺失即降级）；客户端 bundle 是标准的 `load({id, factory})` 单条顶层语句，工厂体整体包在 try/catch 内且预装惰性 `exports` —— **即使模块体抛错，也只会让这一个条目静默失效，不会中断同一批脚本里的其它插件包** |
-| D 与检出对照 | 不占用、不遮蔽官方的东西 | `dsh.client.inject` 的每个包真实存在且声明 `dsh.client`；5 个目标插槽在 0.2.0 目录中都是 **list 型**（只增不替换）且非 `shadows-shipped-ui`；我们的 entry id 未占用官方已注册 id；6 个模型工具名不与官方工具重名（对照 65 个已发布工具） |
+| D 与检出对照 | 不占用、不遮蔽官方的东西，且能被当前版本接纳 | **DSH 权威准入校验放行**（`evaluatePluginCompatibility` 返回 undefined）；`dsh.client.inject` 的每个包真实存在且声明 `dsh.client`；5 个目标插槽在 0.2.0 目录中都是 **list 型**（只增不替换）且非 `shadows-shipped-ui`；我们的 entry id 未占用官方已注册 id；6 个模型工具名不与官方工具重名（对照 65 个已发布工具） |
 
 > 不带检出路径时只跑 A/B/C（23 项）。退出码 0 = 通过。
 
@@ -132,6 +132,11 @@ dsh plugin --profile web add link:D:/dshTools/dsh-memory-manager
 
 ## 版本兼容
 
-面向 **DSH 0.2.0-rc.1**，同时保留 **0.1.2-rc.1 → 0.1.7-rc.2** 的降级兼容（客户端会话导航、Chat 数据、消息来源标识、`SurfaceOp` 字段名都有双路径适配，逐条见 [ARCHITECTURE.md「与 DSH 的集成面」](ARCHITECTURE.md#与-dsh-的集成面适配层)）。
+面向 **DSH 0.2.0-rc 系列（rc.1 / rc.2 均已实测）**，同时保留 **0.1.2-rc.1 → 0.1.7-rc.2** 的降级兼容（客户端会话导航、Chat 数据、消息来源标识、`SurfaceOp` 字段名都有双路径适配，逐条见 [ARCHITECTURE.md「与 DSH 的集成面」](ARCHITECTURE.md#与-dsh-的集成面适配层)）。
 
-DSH 在装载 profile 时会用 `semver.satisfies(runtimeVersion, range, { includePrerelease: true })` 校验插件的 `@deepseek-ai/dsh-*` peer；本插件只声明可选的 `@deepseek-ai/dsh-tools`（`>=0.1.0 <0.3.0`），不满足时**只会拒绝本 bundle**，不会影响同一 profile 里的其它插件。
+DSH 在装载 profile 时会用 `semver.satisfies(runtimeVersion, range, { includePrerelease: true })` 校验插件的 `@deepseek-ai/dsh-*` peer；本插件只声明可选的 `@deepseek-ai/dsh-tools`（`>=0.1.0 <0.3.0`），不满足时**只会拒绝本 bundle**，不会影响同一 profile 里的其它插件。`0.2.0-rc.1` / `0.2.0-rc.2` / `0.2.0` 都在该区间内，可用 `node scripts/preflight.mjs <检出>` 自带确认。
+
+### 0.2.0-rc.2 的两点注意
+
+- **`desktop` 是保留 profile**：rc.2 起 `dsh plugin --profile desktop …` 要求该 profile 已被应用初始化（先打开一次 DeepSeek Harness Desktop 并完全退出），否则会提示 `Open DeepSeek Harness Desktop once to initialize its profile`。装到 Web 的 `web` profile 不受影响。
+- **rc.2 相对 rc.1 没有触及本插件的任何集成点**：`packages/core/{session,tools,agent,agent-loop}`、`packages/settings`、`packages/host/webserver`、`packages/llm/llm`、`packages/client/{modules,web,connection,ui-slots,ui-layout,ui-session,ui-settings,ui-workspace}`、`vendor/*` 在两版之间**无源码变更**（只有版本号 bump）；客户端插槽目录只新增了 `sidebar.right.tab.files.actions` 一个官方槽位。会话格式仍是 v4。

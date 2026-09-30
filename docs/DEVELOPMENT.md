@@ -1,6 +1,6 @@
 # 开发指南
 
-面向想要修改、测试或发布本插件的开发者。**0.5.0 起本插件面向 DSH 0.2.0-rc.1**（实测检出：`D:\deepseekagent\version0.2.0-rc.1\deepseek-harness`），同时保留对 0.1.2-rc.1 → 0.1.7-rc.2 的降级兼容；设计原则与迁移要点见 `README.md`「兼容性」章节。Node 需 ≥18（DSH 0.2.0 要求 ^22.19 或 ≥24，测试脚本用到 `structuredClone`）。
+面向想要修改、测试或发布本插件的开发者。**0.5.0 起本插件面向 DSH 0.2.0-rc 系列**（实测检出：`D:\deepseekagent\version0.2.0-rc.1\deepseek-harness`，目录名保留 rc.1，实际代码为 **0.2.0-rc.2**；rc.1 与 rc.2 对插件集成面逐文件 diff 无差异），同时保留对 0.1.2-rc.1 → 0.1.7-rc.2 的降级兼容；设计原则与迁移要点见 `README.md`「兼容性」章节。Node 需 ≥18（DSH 0.2.0 要求 ^22.19 或 ≥24，测试脚本用到 `structuredClone`）。
 
 ## 目录结构
 
@@ -96,12 +96,12 @@ npm install
 
 ```bash
 npm run preflight                            # 安装前自检（离线 23 项）
-node scripts/preflight.mjs <DSH 检出路径>     # 追加插槽 / 工具 / 包名对照（30 项）
+node scripts/preflight.mjs <DSH 检出路径>     # 追加对照 + DSH 权威准入校验（31 项）
 npm test                                     # preflight + Host 集成 + Client 冒烟（无需 DSH 检出）
 DSH_ROOT=<DSH 检出路径> npm run test:dsh020   # 0.2.0 契约六件套
 ```
 
-> `scripts/preflight.mjs` 是「装上不影响 DSH 本体」的机械门禁：它校验 bundle patch 只 `insert`、未声明 `dsh.profile`、所有 DSH peer 都是 optional、客户端 bundle 的单条顶层语句与 try/catch 兜底形状，并在给定检出时对照插槽 kind/占用、工具重名与客户端包名。改 `package.json` / `cordis.patch.yml` / `lib/client.js` 头部之后**务必重跑**。
+> `scripts/preflight.mjs` 是「装上不影响 DSH 本体」的机械门禁：它校验 bundle patch 只 `insert`、未声明 `dsh.profile`、所有 DSH peer 都是 optional、客户端 bundle 的单条顶层语句与 try/catch 兜底形状，并在给定检出时用 **DSH 自己的 `evaluatePluginCompatibility`** 跑准入判定（会打印对照到的运行版本）、再对照插槽 kind/占用、工具重名与客户端包名。改 `package.json` / `cordis.patch.yml` / `lib/client.js` 头部之后**务必重跑**。
 
 ### 1) Host 集成回归 —— `tests/test-apply.mjs`
 

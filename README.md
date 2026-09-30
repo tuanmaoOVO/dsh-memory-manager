@@ -30,7 +30,7 @@
 
 ## 兼容性（跨版本适配策略）
 
-0.5.0 面向 **DSH 0.2.0-rc.1**（按实际源码逐条核对并通过真实内核回归测试），并保留对 **0.1.2-rc.1 → 0.1.7-rc.2** 的降级兼容：
+0.5.0 面向 **DSH 0.2.0-rc 系列**——在 **0.2.0-rc.1** 上逐条核对实现，并在 **0.2.0-rc.2** 上复验（对两版做逐文件 diff：插件用到的 12 个集成点包全部无源码变更，唯一相关差异是客户端插槽目录新增了一个官方槽位 `sidebar.right.tab.files.actions`，与插件无关；DSH 自带准入校验 `evaluatePluginCompatibility(0.2.0-rc.2)` 放行）。同时保留对 **0.1.2-rc.1 → 0.1.7-rc.2** 的降级兼容：
 
 | 集成面 | 策略 |
 |---|---|
@@ -67,7 +67,7 @@
 - **三档开关**：业务软关闭（设置页总开关）→ 行级 `disabled: true`（等同于不存在，数据保留）→ 卸载（顺序为摘 bundle → 卸载运行时贡献 → pnpm remove）。
 - **数据不在 DSH 里**：记忆库是你自己的 Markdown 目录，卸载不会删除；只有 `<DSH_HOME>/memory-manager-*.log` 两份日志可随手删。
 
-以上每一条都由 `scripts/preflight.mjs` 机械校验，也是 `npm test` 的第一步。
+以上每一条都由 `scripts/preflight.mjs` 机械校验，也是 `npm test` 的第一步。带上 DSH 检出路径时，它会额外用 **DSH 自己的准入校验**（`evaluatePluginCompatibility`）判定并打印对照到的运行版本（本次：`0.2.0-rc.2`，31 项全过）。
 
 ## 快速开始
 

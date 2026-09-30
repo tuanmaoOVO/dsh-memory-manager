@@ -4,6 +4,8 @@
 
 **设计原则（0.5.0 起）**：只依赖 DSH 最稳定的核心扩展点（volatile `Config` / `ctx.settings.update` / `tools` / `agent` 事件 / `webServer` / `sessionQuery`），功能全部自包含实现，官方插件包一律不依赖；官方升级的影响面被压缩为「个别能力降级」，而不是「加载失败」。
 
+> **版本基线**：实现按 **0.2.0-rc.1** 逐条核对，并在 **0.2.0-rc.2** 上复验 —— 两版之间本文件列出的集成面（见下表）**逐文件 diff 无源码变更**，通过的准入校验为 DSH 自带的 `evaluatePluginCompatibility`（对照运行版本 `0.2.0-rc.2`）。
+
 ## 架构总览（ASCII）
 
 ```
@@ -165,8 +167,7 @@
 ## HTTP API 设计
 
 - **双通道**（同一 `handler`）：
-  - 兼容通道：`/_dsh/memory-manager/api`（`ctx.webServer.register({kind:'exact', path, handler})`；0.2.0 的 `WebRoute` 仍是 `{kind:'exact'|'prefix', path, handler(req,res)}`）。
-  - 标准通道：`ctx.connection.rpc.intercept('/api', endpoint => endpoint.startsWith('memory-manager/'), handler)`。注意 0.2.0 的首个参数是**保留频道字面量** `'/api'`（不是任意前缀），归属由第二参数 `matches` 判定；`/api` 由 Typert Gateway 拥有，插件的 `memory-manager/*` 谓词与它不冲突。0.2.0 更「官方」的做法是 `TypertRemoteService` + `@Remote`（见 `docs/cookbook/adding-a-remote-api.md`），本插件为保持跨版本兼容仍走 `intercept`。
+  - 兼容通道：`/_dsh/memory-manager/api`（`ctx.webServer.register({kind:'exact', path, handler})`；0.2.0 的 `WebRoute` 仍是 `{kind:'exact'|'prefix', path, handler(req,res)}`）。  - 标准通道：`ctx.connection.rpc.intercept('/api', endpoint => endpoint.startsWith('memory-manager/'), handler)`。注意 0.2.0 的首个参数是**保留频道字面量** `'/api'`（不是任意前缀），归属由第二参数 `matches` 判定；`/api` 由 Typert Gateway 拥有，插件的 `memory-manager/*` 谓词与它不冲突。0.2.0 更「官方」的做法是 `TypertRemoteService` + `@Remote`（见 `docs/cookbook/adding-a-remote-api.md`），本插件为保持跨版本兼容仍走 `intercept`。
 - **GET**：探测 `{ ok:true, service:'memory-manager', enabled }`。
 - **POST**：JSON 信封 `{ op, sessionId?, args? }`；响应 `{ ok, value }`（业务错误 `ok:false` + `value.error`）。请求体上限 256 KiB。
 - **op 清单（共 29 个）**：见 [docs/API.md](API.md)。

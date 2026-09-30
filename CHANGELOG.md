@@ -6,6 +6,18 @@
 
 ## [0.5.0] - 2026-09-30
 
+### 复验 DSH 0.2.0-rc.2（无需改代码）
+
+对 `dsh-v0.2.0-rc.1 → dsh-v0.2.0-rc.2`（`639ed015`，1022 个文件变更）做逐路径 diff，插件用到的集成面**全部无源码变更**（只有版本号 bump）：
+
+- 无变更：`packages/core/{session,tools,agent,agent-loop}`、`packages/settings/settings`、`packages/host/webserver`、`packages/llm/llm`、`packages/client/{modules,web,connection,ui-slots,ui-layout,ui-session,ui-settings,ui-workspace}`、`packages/session-query/session-query`、`packages/workspace/workspace`、`packages/api/session-controller`、`vendor/*`（cordis / cosmokit / schemastery / loader）。会话格式仍为 v4。
+- 相关但无影响：客户端插槽目录 `slot-catalog.ts` 只新增官方槽位 `sidebar.right.tab.files.actions`（与本插件 5 个槽位无关，`kind`/`scope`/`replaceRisk`/`declaredBy` 逐项比对一致）；`ui-renderer/scoped-slots.tsx` 仅把 `nextAncestors` 移进 `useMemo`（等价重构）；`api/gateway` 只新增 `hasLiveClient()`；`ui-settings-general` 只改了一个快捷键。
+- 关键导出逐个复核仍在：`defineTool`、`isReplaceOp` / `startSeq`、`settings.update`、`agent/pre-step`、`agent/created`、`sessions.get`、`webServer.register`、`connection.rpc.intercept`、`ClientBundleRegistration`、`slot ... is not declared`。
+
+**preflight 增加权威准入校验**：带上检出路径时，直接用 DSH 自己的 `packages/boot/app-boot` 的 `evaluatePluginCompatibility(pkg, {}, getDshRuntimeVersion())` 判定（与 DSH 装载 profile 时对每个 bundle 的判定同一段代码），并打印对照到的运行版本。本次结果：`0.2.0-rc.2` 放行，共 31 项全过。此前基于正则的 peer 区间启发式检查保留为离线兜底。
+
+**文档**：README / ARCHITECTURE / INSTALL / DEVELOPMENT 的版本区间由「0.2.0-rc.1」更新为「0.2.0-rc 系列（rc.1 / rc.2 均已实测）」；INSTALL 增补 rc.2 的两点注意（`desktop` 为保留 profile，须先由桌面应用初始化；rc.2 未触及本插件集成点）。
+
 ### 宿主安全与装卸体验
 
 - **新增 `scripts/preflight.mjs`（安装前自检，30 项）**：把「装上后不影响 DSH 本体」变成机械结论，并作为 `npm test` 的第一步。四组检查 ——
