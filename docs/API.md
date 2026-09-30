@@ -1,6 +1,6 @@
 # API 参考
 
-本插件对外暴露三类接口：HTTP JSON API、Agent 模型工具、系统提示注入段。配置通过 DSH settings 命名空间管理。
+本插件对外暴露三类接口：HTTP JSON API、Agent 模型工具、系统提示注入段。配置通过插件自身的 **volatile `Config`**（0.2.0 模型）承载，由 DSH 设置页 / 插件的设置区块读写。
 
 ---
 
@@ -127,11 +127,14 @@
 
 | 属性 | 值 |
 |---|---|
-| 事件 | `agent/pre-step`（`prepend: true`） |
-| 消息 `name` | `memory-manager:context`（source 的 sections 标记） |
-| 消息形式 | `form: 'snapshot'` 的 plugin 消息（`source: { kind: 'plugin', plugin: 'dsh-memory-manager' }`），追加到请求消息末尾，UI 折叠显示（同 DSH time-context），模型可见 |
+| 事件 | `agent/pre-step`（`prepend: true`，waterfall，先 `await next()` 再追加） |
+| 消息 `name` | `memory-manager:context`（source 的 `sections[0].name`） |
+| 消息来源 | `source: { kind: 'memory-manager', form: 'snapshot', sections: [{ name: 'memory-manager:context', text }] }`，追加到请求消息末尾，UI 折叠显示（同 DSH time-context），模型可见 |
+| 触发条件 | 仅当本次 step 由用户消息触发（`payload.messages` 含 `source.kind === 'user'`）；工具结果 step 不注入 |
 | 渲染 | 每个请求 step 组装一次；会话激活（`mode==='on'` 或 `injectOnce` 或一次性队列非空）时输出注入文本，否则跳过 |
 
+> **0.2.0 来源标识**：DSH 0.2.0 的 `MessageSource` 是 merge-extensible 判别联合，明确「there is no shared catch-all `plugin` kind」——每个生产者声明自己的 `kind`。本插件因此用 `kind: 'memory-manager'`；`form: 'snapshot'` 按内核契约**必须**携带 `sections`。历史会话里 0.1.x 写入的 `{ kind: 'plugin', plugin: 'memory-manager' }` 仍被识别（排除标记的恢复逻辑依赖它）。
+>
 > **为什么不用 `systemPrompt.section`**：极简模式（persona `complete: true`）会让 `assemble()` 丢弃所有其他 sections，注入内容从未进入模型请求（2026-08-15 实测修复）。`agent/pre-step` 消息注入与 complete section、`includeRuntimeContext` 均无关，任何会话形态都生效。
 
 注入文本包裹格式：
@@ -151,9 +154,15 @@
 
 ---
 
-## 4. settings 配置 schema
+## 4. 配置 schema（volatile Config）
 
-命名空间 `memory-manager`，通过 `settingsNamespace('memory-manager')` 注册，`applies: 'live'`：
+0.2.0 起插件不再调用 `ctx.settings.register(...)`（该方法已从内核移除）。配置改为：
+
+- **声明**：`lib/index.js` 导出 schemastery `Config`，9 个字段全部 `.volatile()`。DSH 设置页按 `volatile` 字段投影表单。
+- **读取**：`apply(ctx, config)` 收到的 config 引用中，volatile 字段是 `{ get(): value }` 引用对象（`@deepseek-ai/cosmokit` 的 `Volatile<T>`）；插件内部由 `m.syncCfg()` 解包进进程内快照 `m.cfg`。
+- **写入**：`ctx.settings.update(<profile entry id>, patch)`。`ns` 是 **profile 条目 id**（本插件的 `cordis.patch.yml` 写的是 `- id: memory-manager`），插件从 `ctx.fiber.entry.options.id` 读取，取不到时回退 `memory-manager`。
+- **热更新**：内核把变更就地提交进 volatile 引用并派发 `loader/volatile-update`，插件监听后同步 `m.cfg`，**无需重挂插件**。
+- **设置页形态**：插件自带设置区块（客户端 `settings.section` 插槽），因此调用 `ctx.settings.configure({ auto: false })` 关闭内核自动生成表单，避免同一组字段出现两份。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
@@ -167,4 +176,6 @@
 | `pinChars` | number | `6000` | 固定消息合计上限 |
 | `autoInjectConvention` | boolean | `true` | 新会话自动注入规约 / 会话总结记忆开关 |
 
-校验：`libraryPath` 非空时长度不得超过 4096（超长抛错）。旧 `config.json` 首次运行自动迁移为 `base`。
+**旧 `config.json` 一次性迁移**：升级后首次启动，若记忆库目录下仍存在 0.1.x 的 `config.json`，插件把其中的 `mode` / `view` / `modelTools` / `libraryPath` / `memoryChars` / `totalChars` / `pinChars` 写回 profile 设置，并在记忆库 `pinned/.config-imported` 落标记（幂等，不重复导入）。
+
+**schema 依赖**：`@deepseek-ai/schemastery`（DSH vendored 的同名包，npm 已发布 3.18.4）。插件按 `@deepseek-ai/schemastery` → 裸 `schemastery` 的顺序解析；若解析到的实现没有 `.volatile()`，`Config` 仍可用但设置页消失（写回退化为进程内），插件其余能力不受影响。

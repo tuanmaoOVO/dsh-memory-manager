@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/dsh-memory-manager",
-  "version": "0.4.0",
-  "description": "DSH 记忆管理插件（宿主级，标准化重写版）：文件夹记忆库、印象、组合与双向链接、会话级注入计划与消息注入、规约记忆与最近会话总结的新会话自动注入、会话总结、跨工作区会话列表、6 个 Agent 记忆工具、左侧图谱双视图浮层与消息跳转、设置页开关。只依赖 DSH 核心扩展点（settings/tools/agent 事件/webServer），功能实现自包含，官方升级影响面最小。",
+  "version": "0.5.0",
+  "description": "DSH 记忆管理插件（宿主级，面向 DSH 0.2.0 重写）：文件夹记忆库、印象、组合与双向链接、会话级注入计划与消息注入、规约记忆与最近会话总结的新会话自动注入、会话总结、跨工作区会话列表、6 个 Agent 记忆工具、左侧图谱双视图浮层与消息跳转、设置页开关。只依赖 DSH 核心扩展点（volatile Config + ctx.settings.update / tools / agent 事件 / webServer / sessionQuery），功能实现自包含；会话表面写入按内核字段名自适应、客户端会话跳转按内核导航 API 自适应（DSH 0.2.0-rc.1 实测，同时兼容 0.1.2-rc.1 → 0.1.7-rc.2），官方升级影响面最小。",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "main": "lib/index.js",
@@ -13,6 +13,7 @@
   },
   "files": [
     "lib",
+    "scripts",
     "cordis.patch.yml",
     "docs",
     "examples",
@@ -35,31 +36,46 @@
     "url": "https://github.com/tuanmaoOVO/dsh-memory-manager.git"
   },
   "dsh": {
+    "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-session",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-chat",
         "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-workspace",
         "@deepseek-ai/dsh-client-ui-settings-general",
         "@deepseek-ai/dsh-api-session-controller"
       ],
       "platform": "web"
     }
   },
+  "scripts": {
+    "preflight": "node scripts/preflight.mjs",
+    "test": "node scripts/preflight.mjs && node tests/test-apply.mjs && node tests/smoke-client.mjs",
+    "test:apply": "node tests/test-apply.mjs",
+    "test:client": "node tests/smoke-client.mjs",
+    "test:dsh020": "node tests/test-cordis-020.mjs && node tests/test-settings-020.mjs && node tests/test-tools-020.mjs && node tests/test-client-slots-020.mjs && node tests/test-surface.mjs && node tests/test-pre-step-e2e-020.mjs"
+  },
   "dependencies": {
-    "schemastery": "^3.18.0"
+    "@deepseek-ai/schemastery": "^3.18.4"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-tools": ">=0.1.0 <0.4.0",
-    "react": "^18.2.0"
+    "@deepseek-ai/dsh-tools": ">=0.1.0 <0.3.0"
   },
   "peerDependenciesMeta": {
-    "@deepseek-ai/dsh-tools": { "optional": true },
-    "react": { "optional": true }
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-tools": "^0.2.0-rc.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "license": "MIT"
 }

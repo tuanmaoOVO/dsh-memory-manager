@@ -23,6 +23,7 @@ global.window = {
   __ModuleLoader__: { load: (opts) => { factory = opts.factory } },
   __memErrCapInstalled: false,
   addEventListener: () => {},
+  dispatchEvent: () => true,
 }
 global.document = {
   querySelector: () => null,
@@ -35,10 +36,12 @@ global.confirm = () => true
 // ---------- 注入测试导出并加载 ----------
 const clientPath = process.env.DSH_TEST_CLIENT || fileURLToPath(new URL('../lib/client.js', import.meta.url))
 let src = fs.readFileSync(clientPath, 'utf8')
-const injectPoint = 'return module.exports; } });'
-if (!src.includes(injectPoint)) throw new Error('注入点未找到')
+// 注入点必须在**模块体的词法作用域内**：bundle 的工厂体整体包在 try/catch 里
+// （宿主安全兜底），组件是块级声明，只能从 try 块内部引用。
+const injectPoint = '// __MEM_TEST_INJECT__'
+if (!src.includes(injectPoint)) throw new Error('注入点未找到（bundle 结构变了？见 lib/client.js 的 __MEM_TEST_INJECT__ 标记）')
 src = src.replace(injectPoint,
-  'module.exports.__test = { Panel, PlanTab, LibraryTab, MessagesTab, GraphPanel, GraphDetail, SaveDialog, ComposeDialog, EditDialog, SummarizeDialog, InputButton, SettingsSection, Boundary, MessageActions, Switch, IconBtn, JumpReceiver };\n' + injectPoint)
+  'module.exports.__test = { Panel, PlanTab, LibraryTab, MessagesTab, GraphPanel, GraphDetail, SaveDialog, ComposeDialog, EditDialog, SummarizeDialog, InputButton, SettingsSection, Boundary, MessageActions, Switch, IconBtn, JumpReceiver, jumpTo };\n' + injectPoint)
 eval(src)
 if (!factory) throw new Error('factory not captured')
 const mod = factory(requireDsh)
@@ -53,13 +56,45 @@ const slots = {
   inject: (name, fn) => { const unreg = fn(); registered.push(name); if (typeof unreg === 'function') unreg() },
   register: () => () => {},
 }
-const ctx = {
-  get(name) { if (name === 'slots') return slots; return undefined },
+// 跳转路径的调用记录：会话导航 + 主列面板复位
+// 0.2.0：会话导航入口是 ctx.uiWorkspace.openSession(target)
+//       （ctx.sessions.open 自 0.1.6-alpha.2 起已移除）；
+//       ctx.layout.selectPanel(null) 仍在。
+const jumpCalls = { open: [], selectPanel: [] }
+const jumpCtx = {
+  get(name) {
+    if (name === 'slots') return slots
+    if (name === 'uiWorkspace') return { openSession: (id) => { jumpCalls.open.push(id) } }
+    if (name === 'layout') return { selectPanel: (id) => { jumpCalls.selectPanel.push(id) } }
+    return undefined
+  },
   effect: (fn) => { const r = fn(); if (typeof r === 'function') r() },
 }
+const ctx = jumpCtx
 const disposer = mod.apply(ctx)
 if (typeof disposer !== 'function') fail('apply 应返回 disposer 函数')
 else ok('apply returned disposer; slots: ' + registered.join(', '))
+
+// ---------- 跳转路径：切会话 + 复位主列面板 ----------
+try {
+  T.jumpTo('s-jump', 'turn-1', 7)
+  if (!jumpCalls.open.includes('s-jump')) fail('jumpTo 未调用 uiWorkspace.openSession')
+  else if (!jumpCalls.selectPanel.includes(null)) fail('jumpTo 未调用 layout.selectPanel(null)（主列面板复位）')
+  else if (jumpCalls.open.length !== jumpCalls.selectPanel.length) fail('jumpTo 的 openSession / selectPanel 调用次数不一致')
+  else ok('jumpTo 切会话并复位主列面板: openSession=' + jumpCalls.open.join(',') + ' selectPanel=' + JSON.stringify(jumpCalls.selectPanel))
+  // 旧版（无 uiWorkspace，只有 sessions.open）必须走兼容回退而不是静默失效
+  const legacyCalls = []
+  mod.apply({ get: (name) => (name === 'slots' ? slots : name === 'sessions' ? { open: (id) => legacyCalls.push(id) } : undefined), effect: (fn) => { fn() } })
+  T.jumpTo('s-legacy', 'turn-2', 3)
+  if (!legacyCalls.includes('s-legacy')) fail('无 uiWorkspace 时未回退到 sessions.open')
+  else ok('无 uiWorkspace 时回退 sessions.open（向后兼容）')
+  // 两个服务都没有时静默跳过（仅派发跳转事件）
+  mod.apply({ get: (name) => (name === 'slots' ? slots : undefined), effect: (fn) => { fn() } })
+  T.jumpTo('s-none', '', null)
+  ok('无任何会话服务时 jumpTo 静默跳过')
+} catch (e) {
+  fail('jumpTo 主列面板复位断言异常', e)
+}
 
 // ---------- SSR 渲染所有组件 ----------
 const React = requireDsh('react')
