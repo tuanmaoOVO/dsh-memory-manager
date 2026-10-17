@@ -30,22 +30,24 @@
 
 ## 兼容性（跨版本适配策略）
 
-0.5.0 面向 **DSH 0.2.0-rc 系列**——在 **0.2.0-rc.1** 上逐条核对实现，并在 **0.2.0-rc.2** 上复验（对两版做逐文件 diff：插件用到的 12 个集成点包全部无源码变更，唯一相关差异是客户端插槽目录新增了一个官方槽位 `sidebar.right.tab.files.actions`，与插件无关；DSH 自带准入校验 `evaluatePluginCompatibility(0.2.0-rc.2)` 放行）。同时保留对 **0.1.2-rc.1 → 0.1.7-rc.2** 的降级兼容：
+**0.5.1 面向 DSH 0.2.1-rc.2**（当前最新）。核对方式是对 `dsh-v0.2.0-rc.2 → dsh-v0.2.1-rc.2`（1482 次提交）做逐路径 `git diff`，并用 DSH 自带的准入校验 `evaluatePluginCompatibility(0.2.1-rc.2)` 与 6 套真实内核回归测试确认。结论：**插件用到的集成面没有破坏性变更**，唯一需要跟进的是 0.2.1 的新机制 `engines.dsh`（本版已声明）。同时保留对 **0.1.2-rc.1 → 0.2.1-rc.2** 的降级兼容：
 
 | 集成面 | 策略 |
 |---|---|
+| **版本声明** | 0.2.1 起 `engines.dsh` **一旦声明就单独决定准入**，`peerDependencies` 被忽略；0.2.0 及更早只认 `@deepseek-ai/dsh*` peer。本插件两条都声明：`engines.dsh: ">=0.1.2-rc.1 <0.3.0"`（新内核按它判）+ 可选 peer `@deepseek-ai/dsh-tools: ">=0.1.0 <0.3.0"`（旧内核按它判） |
 | **配置** | 0.2.0 移除了 `ctx.settings.register(ns, Config, opts)`（连同 `get/watch/update/dispose` 作用域一并删除，无兼容层）。插件改为导出 schemastery `Config`（9 字段全 `.volatile()`）由 DSH 设置页投影表单；读取 `apply()` 收到的 volatile 引用（`{get()}`），写回 `ctx.settings.update(<profile entry id>, patch)`；`ctx.settings.configure({auto:false})` 关闭自动表单（插件自带设置区块）。schema 优先取 `@deepseek-ai/schemastery`（DSH vendored 同名包），缺失或旧版无 `.volatile()` 时降级为「无设置页」，插件其余能力不受影响 |
-| **消息来源** | 0.2.0 的 `MessageSource` 不再有通用 `'plugin'` kind，改为 `kind: 'memory-manager'`；`form:'snapshot'` 必须携带 `sections`；历史会话里 0.1.x 的 `{kind:'plugin', plugin:'memory-manager'}` 仍被识别（排除标记恢复依赖它） |
+| **消息来源** | 0.2.0 的 `MessageSource` 不再有通用 `'plugin'` kind，改为 `kind: 'memory-manager'`；`form:'snapshot'` 必须携带 `sections`；历史会话里 0.1.x 的 `{kind:'plugin', plugin:'memory-manager'}` 仍被识别（排除标记恢复依赖它）。**0.2.1 起不得复用 `runtime-context`**：循环会在 append 前把该 kind 的消息替换成刷新后的运行时上下文，借用会被静默吞掉 |
 | 事件 / 工具 / 注入 / `webServer` | 只用核心服务与事件，`ctx.get` 可选探测，缺失即降级（如工具不注册、注入不激活），不阻断启动；硬依赖仅 `inject: ['tools']` |
 | 会话读取 | 优先 live `ctx.sessions.get(id)`（`surface.nodes` + `snapshotEvents()`；该读法在 0.2.0 已标 deprecated，失败即回退 `ctx.sessionQuery.readSurface()`） |
-| 会话表面写入（排除 / 恢复） | `m.appendReplace` 首次调用探测内核 `SurfaceOp` 字段名并缓存（0.2.0 为 `{op:'replace', startSeq, endSeq}`，恰好 3 个自有键；0.1.2 为 `{op:'replace', start, end}`），两版都可写；0.2.0 额外要求 surfaceOp 必填、`sourceEventSeqs` 完整覆盖被遮蔽节点、`tool/result` 只能改 `content`；`assistant/message` 不能作为替换事件，恢复时降级为 user 文本（内容不丢） |
-| 会话列表 | `ctx.workspaceRegistry`（list / archivedSessionIds）+ `ctx.sessionQuery.readTitle`（0.2.0 返回 `SessionTitleSnapshot`）；无工作区服务时回退 0.2.0 的 `sessionQuery.listSessions()` |
-| LLM | 直接调 `ctx.llm.stream` + `ctx.agentDefaultModel.currentSelection()` —— 会话总结 / 印象建议自包含 |
-| 记忆库 / 计划 / 排除 | `node:fs` 纯文件层（`.dsh-memory`），与 DSH 存储完全隔离 |
-| 客户端 bundle | `window.__ModuleLoader__.load({id, factory})` 与 `dsh.client` 声明在 0.2.0 未变；`exports.inject = ['slots']`；只用 0.2.0 `SlotMap` 中仍在的插槽（`conversation.input.left` / `session.header.actions` / `shell.overlay` / `settings.section` / `chat.assistant-actions`） |
+| 会话表面写入（排除 / 恢复） | `m.appendReplace` 首次调用探测内核 `SurfaceOp` 字段名并缓存（0.2.x 为 `{op:'replace', startSeq, endSeq}`，恰好 3 个自有键；0.1.2 为 `{op:'replace', start, end}`），两版都可写；0.2.x 额外要求 surfaceOp 必填、`sourceEventSeqs` 完整覆盖被遮蔽节点、`tool/result` 只能改 `content`；`assistant/message` 不能作为替换事件，恢复时降级为 user 文本（内容不丢）。0.2.1 的 `surface.ts` 只改了注释，规则未变 |
+| 会话格式 | 0.2.1 仍是 **SESSION_FORMAT_VERSION = 4**，历史会话无需迁移 |
+| 会话列表 | `ctx.workspaceRegistry`（list / archivedSessionIds）+ `ctx.sessionQuery.readTitle`；无工作区服务时回退 `sessionQuery.listSessions()`（0.2.1 起记录可能多带一个可选 `formatStatus`，不影响读取） |
+| LLM | 直接调 `ctx.llm.stream` + `ctx.agentDefaultModel.currentSelection()` —— 会话总结 / 印象建议自包含（0.2.1 的 `GenerateOptions` 无变化） |
+| 记忆库 / 计划 / 排除 | `node:fs` 纯文件层（`.dsh-memory`），与 DSH 存储完全隔离。**自动锚点按「已有记忆的候选库优先」排序**（工作区新建即置顶，盲取 `list()[0]` 会漂移）；设置页会显示「当前生效路径 · 条数 · 手动/自动」并可一键恢复自动锚点 |
+| 客户端 bundle | `window.__ModuleLoader__.load({id, factory})` 与 `dsh.client` 声明未变（0.2.1 只在 boot 图里加了可选 `release` 字段）；`exports.inject = ['slots']`；只用仍在的插槽（`conversation.input.left` / `session.header.actions` / `shell.overlay` / `settings.section` / `chat.assistant-actions`，0.2.1 全部仍为 list 型） |
 | 客户端会话导航 | 0.2.0 移除了客户端 `ctx.sessions.open(id)`，改用 `ctx.uiWorkspace.openSession(target)`；插件保留旧内核的 `sessions.open` 回退，主列复位仍是 `ctx.layout.selectPanel(null)` |
-| 客户端 Chat 数据 | 0.2.0 的 `SessionSnapshot` 不再含 `s.chat`（Chat 目标数据由 ui-chat 的 `useChat` 提供）；跳转接收器优先 `useChat`、回退旧字段 |
-| 工具定义 | 优先 `defineTool`（`@deepseek-ai/dsh-tools`），不可用时回退内置等价实现（形状一致，均通过真实内核 `ctx.tools.register()` 校验） |
+| 客户端 Chat 数据 | 0.2.0 的 `SessionSnapshot` 不再含 `s.chat`（Chat 目标数据由 ui-chat 的 `useChat` 提供）；跳转接收器优先 `useChat`、回退旧字段。0.2.1 的 `ChatSnapshot` 仍是 `order` + `nodes`，消息锚点属性 `data-chat-node-key` / `data-chat-anchor-key` 未变 |
+| 工具定义 | 优先 `defineTool`（`@deepseek-ai/dsh-tools`），不可用时回退内置等价实现（形状一致，均通过真实内核 `ctx.tools.register()` 校验）。0.2.1 只动了 PTC 展示模式（移除 `both`），工具定义契约未变 |
 
 > 目标：官方 DSH 升级到下一个小版本时，插件最坏情况是「个别能力降级」，而不是「页面无法启动 / 插件加载失败」。
 
@@ -57,17 +59,17 @@
 2. **命令行**：`dsh plugin --profile web add file:D:/dshTools/dsh-memory-manager`（开发迭代用 `link:` 前缀）。
 3. **手动**：把包内 `cordis.patch.yml` 的 `insert` 段抄进 profile 层栈，并把包名加进 `dsh.profile.bundles`。
 
-**安装前建议先自检**：`node scripts/preflight.mjs <DSH 检出路径>`（30 项，见 INSTALL.md）。
+**安装前建议先自检**：`node scripts/preflight.mjs <DSH 检出路径>`（35 项，见 INSTALL.md）。
 
 ### 安全边界（装上不影响 DSH 本体）
 
 - **只增不改**：bundle patch 只用 `insert`，插入行 `id: memory-manager` 为插件专属，不 `remove` / 不覆盖任何既有行；未声明 `dsh.profile`，永远不能充当或替换 profile 组合。
-- **失败只损失自己**：所有 DSH peer 都是 optional（版本不匹配时只拒绝本 bundle）；客户端 bundle 是单条顶层 `load({id, factory})` 语句，工厂体整体包在 try/catch 内并预装惰性 `exports` —— 模块体抛错只会让插件静默失效，不会中断同一批脚本里的其它插件包。
-- **只占自己的一格**：5 个目标插槽在 0.2.0 目录中都是 **list 型**（只增不替换）、非 `shadows-shipped-ui`，entry id 未占用任何官方 id；6 个模型工具名不与官方 65 个工具重名；HTTP 路由在 `/_dsh/memory-manager/api` 专属路径下。
+- **失败只损失自己**：版本兼容性由 `engines.dsh` 单独声明（`>=0.1.2-rc.1 <0.3.0`，不满足时只拒绝本 bundle）；客户端 bundle 是单条顶层 `load({id, factory})` 语句，工厂体整体包在 try/catch 内并预装惰性 `exports` —— 模块体抛错只会让插件静默失效，不会中断同一批脚本里的其它插件包。
+- **只占自己的一格**：5 个目标插槽在 0.2.1 目录中都是 **list 型**（只增不替换）、非 `shadows-shipped-ui`，entry id 未占用任何官方 id；6 个模型工具名不与官方 68 个工具重名；HTTP 路由在 `/_dsh/memory-manager/api` 专属路径下。
 - **三档开关**：业务软关闭（设置页总开关）→ 行级 `disabled: true`（等同于不存在，数据保留）→ 卸载（顺序为摘 bundle → 卸载运行时贡献 → pnpm remove）。
 - **数据不在 DSH 里**：记忆库是你自己的 Markdown 目录，卸载不会删除；只有 `<DSH_HOME>/memory-manager-*.log` 两份日志可随手删。
 
-以上每一条都由 `scripts/preflight.mjs` 机械校验，也是 `npm test` 的第一步。带上 DSH 检出路径时，它会额外用 **DSH 自己的准入校验**（`evaluatePluginCompatibility`）判定并打印对照到的运行版本（本次：`0.2.0-rc.2`，31 项全过）。
+以上每一条都由 `scripts/preflight.mjs` 机械校验，也是 `npm test` 的第一步。带上 DSH 检出路径时，它会额外用 **DSH 自己的准入校验**（`evaluatePluginCompatibility`）判定并打印对照到的运行版本（本次：`0.2.1-rc.2`，35 项全过），并验证「声明 `engines.dsh` 后 peer 不再参与准入」这一 0.2.1 新规则确实生效。
 
 ## 快速开始
 
@@ -183,8 +185,8 @@ enabled: true
 - `lib/client.js` 是浏览器 bundle 构建产物格式（factory 内为 CJS），修改后需保持 `window.__ModuleLoader__.load({ id, factory })` 包裹格式与 `exports.inject = ['slots']`。
 - 回归测试分两组：
   - **不依赖 DSH 检出**：`npm test` → `tests/test-apply.mjs`（Host apply 回归：volatile 配置、注册、注入、全部 op、旧配置迁移）+ `tests/smoke-client.mjs`（mock 浏览器 + SSR 渲染各组件 + 导航 / 按钮断言）。
-  - **需要 DSH 检出路径**：`DSH_ROOT=<DSH 检出> npm run test:dsh020` → 6 个契约测试：`test-cordis-020.mjs`（真实 Cordis 激活 + volatile 就地提交）、`test-settings-020.mjs`（Config 对 volatile/settings 机制）、`test-tools-020.mjs`（6 个工具进真实 `ctx.tools`）、`test-client-slots-020.mjs`（6 条插槽注册进真实 `SlotCore` + 包名校验）、`test-surface.mjs`（真实 `Session` 跑排除 / 恢复）、`test-pre-step-e2e-020.mjs`（真实 AgentLoop 端到端跑一轮，断言注入进入模型请求）。
-- 需要 Node ≥18（DSH 0.2.0 要求 ^22.19 或 ≥24；测试用到 `structuredClone`）。
+  - **需要 DSH 检出路径**：`DSH_ROOT=<DSH 检出> npm run test:dsh020` → 6 个契约测试：`test-cordis-020.mjs`（真实 Cordis 激活 + volatile 就地提交）、`test-settings-020.mjs`（Config 对 volatile/settings 机制）、`test-tools-020.mjs`（6 个工具进真实 `ctx.tools`）、`test-client-slots-020.mjs`（6 条插槽注册进真实 `SlotCore` + 包名校验）、`test-surface.mjs`（真实 `Session` 跑排除 / 恢复）、`test-pre-step-e2e-020.mjs`（真实 AgentLoop 端到端跑一轮，断言注入进入模型请求且不被 0.2.1 的 `runtime-context` 替换逻辑吞掉）。
+- 需要 Node ≥18（DSH 0.2.x 要求 ^22.19 或 ≥24；测试用到 `structuredClone`）。
 
 ## 许可证
 
@@ -194,4 +196,4 @@ enabled: true
 
 ## English Summary
 
-**dsh-memory-manager** is a host-level plugin for the DeepSeek Harness (targeting DSH 0.2.0-rc.1, with graceful fallbacks down to 0.1.2-rc.1) that gives agents a durable, cross-session memory. Memories are plain Markdown files with front-matter metadata (Obsidian-compatible), each composed of an immutable snapshot plus an editable annotations layer. Memories carry short "impression" tags plus a classification `tags` field and a per-memory `enabled` switch; a memory tagged `convention` is a convention memory, and one tagged `会话总结` is a session summary. With `autoInjectConvention` on, every new session automatically receives all enabled convention memories plus the latest 8 session-summary memories. A per-session context plan — pinned messages plus checked memories — is injected into each request via an `agent/pre-step` message carrying `source: { kind: 'memory-manager', form: 'snapshot', sections }`, with per-memory and total character caps and a compact view. Six model tools (`memory_search`, `memory_recall`, `memory_save`, `memory_set_enabled`, `session_inject`, `memory_pin`) give the agent direct read / write / plan control. Configuration lives on the plugin's own schemastery `Config` (every field `.volatile()`), surfaced by the host settings page and written back through `ctx.settings.update(profileEntryId, patch)`. The browser side provides a right-side panel (plan / library / messages tabs), a separate left-side force-directed knowledge graph overlay with semantic-panorama and focus-exploration views, a session-summarize dialog (`session.summarize`), cross-workspace session listing (`sessions.list`), and message jump-to-conversation (via `ctx.uiWorkspace.openSession`), plus settings switches. The Host half exposes an HTTP JSON-RPC-style endpoint (`/_dsh/memory-manager/api`) that the browser Client calls. It is MIT-licensed and published to open source.
+**dsh-memory-manager** is a host-level plugin for the DeepSeek Harness (targeting DSH 0.2.1-rc.2, verified on 0.2.0-rc.1/0.2.0-rc.2, with graceful fallbacks down to 0.1.2-rc.1) that gives agents a durable, cross-session memory. Memories are plain Markdown files with front-matter metadata (Obsidian-compatible), each composed of an immutable snapshot plus an editable annotations layer. Memories carry short "impression" tags plus a classification `tags` field and a per-memory `enabled` switch; a memory tagged `convention` is a convention memory, and one tagged `会话总结` is a session summary. With `autoInjectConvention` on, every new session automatically receives all enabled convention memories plus the latest 8 session-summary memories. A per-session context plan — pinned messages plus checked memories — is injected into each request via an `agent/pre-step` message carrying `source: { kind: 'memory-manager', form: 'snapshot', sections }` (deliberately not the reserved `runtime-context` kind, which the loop substitutes in 0.2.1), with per-memory and total character caps and a compact view. Six model tools (`memory_search`, `memory_recall`, `memory_save`, `memory_set_enabled`, `session_inject`, `memory_pin`) give the agent direct read / write / plan control. Configuration lives on the plugin's own schemastery `Config` (every field `.volatile()`), surfaced by the host settings page and written back through `ctx.settings.update(profileEntryId, patch)`; host compatibility is declared with `engines.dsh: ">=0.1.2-rc.1 <0.3.0"`. The browser side provides a right-side panel (plan / library / messages tabs), a separate left-side force-directed knowledge graph overlay with semantic-panorama and focus-exploration views, a session-summarize dialog (`session.summarize`), cross-workspace session listing (`sessions.list`), and message jump-to-conversation (via `ctx.uiWorkspace.openSession`), plus settings switches. The Host half exposes an HTTP JSON-RPC-style endpoint (`/_dsh/memory-manager/api`) that the browser Client calls. It is MIT-licensed and published to open source.

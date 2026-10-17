@@ -4,6 +4,79 @@
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-17
+
+### 修复：新增工作区后「记忆库看起来空了」
+
+**现象**：在 0.2.1-rc.2 上实测时，面板显示 0 条记忆，磁盘上的记忆库（96 条）其实完好。
+
+**根因（实现缺陷，非 DSH 变更）**：自动锚点取的是 `workspaceRegistry.list()[0]`。DSH 的工作区是**新建即置顶**的，所以 `list()[0]` 永远是「最近新建的那个工作区」——用户每加一个工作区，锚点就漂移一次，指向一个不存在 / 空的 `.dsh-memory`。本次实测中 `list()[0]` 是 `D:\scrcpy\scrcpy-win64-v4.1`（10-09 新建），其 `.dsh-memory` 不存在，而真正的库在 `D:\dshTools\.dsh-memory`。
+
+**还叠加了两个放大问题**：
+
+1. **旧 `config.json` 迁移存在循环依赖**：迁移只在「已解析的记忆库目录」里找 `config.json`，而锚点一旦漂移就永远找不到它——旧配置里的正确 `libraryPath` 反而永远读不到。
+2. **空计划被缓存钉死**：`loadPlan()` 在路径尚未解析时把空计划写进 `planCache`，此后即使工作区服务就绪也不会重读，整进程表现为「没有记忆」。
+
+**修复**：
+
+- `lib/memory.js` 新增 `m.libraryCandidates()`（工作区顺序 + 各 agent 会话 cwd，去重）与新的锚点策略：**优先已有 `memories/*.md` 的候选** → 其次目录已存在的候选 → 最后才取第一个候选新建。不再盲取 `list()[0]`。
+- `lib/index.js` 的 `importLegacyConfigFor` 改为遍历**全部候选**查找 `config.json`；采纳其中的 `libraryPath`（仅当目录存在）后立即写回设置并重扫，旧库配置不再因为锚点漂移而丢失。
+- `lib/plan.js`：路径未解析时返回临时空计划且**不缓存**，服务就绪后自动恢复。
+- `lib/api.js`：`state.get` 增加诊断字段 `libraryConfigured` / `librarySource`（configured|auto|none）/ `libraryExists` / `libraryMemoryCount` / `libraryCandidates`；新增 `state.clearLibrary`（恢复自动锚点）；`state.setLibrary` 现在会规范化「粘贴工作区根目录」的输入（自动补 `/.dsh-memory`），并清空 plan / excluded / 索引缓存，避免换库后仍指向旧目录。
+- `lib/client.js`：设置页「记忆库」下方显示「当前生效路径 · 条数 · 手动/自动」，目录不存在时列出候选；手动设置时提供「恢复自动锚点」。面板的记忆库行同样显示生效状态。
+- `lib/util.js`：新增同步探测 `dirExists` / `countFiles`。
+
+**测试**：`tests/test-apply.mjs` 新增 4 项——自动锚点跳过空库选中已有记忆的库、候选顺序变化不影响结果、显式路径优先（含根目录自动补全）、无候选时降级且不钉死空计划后能自动恢复。
+
+**升级提醒**：升级到 0.5.2 并重启后，插件会自动找回 `D:\dshTools\.dsh-memory`（含 96 条记忆，`pinned/plan.json` 里有 1 条计划记忆），并把 `libraryPath` 写回 profile 配置。若旧库不在任何已注册工作区内，请到「设置 → 记忆管理 → 记忆库」手动填绝对路径（可直接粘贴工作区根目录或 `.dsh-memory` 目录本身）。
+
+## [0.5.1] - 2026-10-17
+
+### 适配 DSH 0.2.1-rc.2（唯一必须跟进项：`engines.dsh`）
+
+核对依据：`dsh-v0.2.0-rc.2 → dsh-v0.2.1-rc.2`（`687f282e`，1482 次提交）逐路径 `git diff`，配合官方 `dsh-v0.2.1-rc.2` 更新记录逐条比对。
+
+**唯一需要改代码/清单的变更 —— 版本兼容性声明**
+
+- 0.2.1 起，插件 `package.json` 的 **`engines.dsh` 一旦声明就单独决定准入**，`peerDependencies` 被内核忽略（`packages/boot/app-boot/src/plugin-compatibility.ts` 的 `unmetRequirements`：命中 `engines.dsh` 直接返回，不再遍历 peer；`0.2.0-rc.2` 的同一文件只认 peer）。官方更新记录明确要求「插件作者需检查声明是否覆盖支持的 DSH 版本」。
+- `package.json` 新增 `engines.dsh: ">=0.1.2-rc.1 <0.3.0"`：覆盖本插件全部双路径适配范围（0.1.2-rc.1 → 0.2.1-rc.2），并排除尚未验证的 0.3.0。同时保留可选的 `@deepseek-ai/dsh-tools` peer（`>=0.1.0 <0.3.0`）供 0.2.0 及更早的内核判定——两条都声明时新旧内核行为一致，不满足时只拒绝本 bundle。
+- 版本号 0.5.0 → 0.5.1。
+
+**0.2.1 新增的保留消息 kind：`runtime-context`**
+
+- `agent-loop` 在 append 决策消息前按 `source.kind` 分流：`runtime-context` 那条会被替换成瀑布之后 `systemPrompt.refreshContext()` 重新投影的运行时上下文，其余 kind 原样追加（`packages/core/agent-loop/src/agent.ts` 的 `contextAdmitted` 分支）。插件若借用该 kind，注入会被**静默吞掉**。
+- 本插件固定使用 `memory-manager`（不变），新增：
+  - `lib/util.js` 的 `RESERVED_CONTEXT_KIND` 常量 + 静态断言（`PLUGIN_KIND === 'runtime-context'` 会在加载期抛错）；
+  - `tests/test-pre-step-e2e-020.mjs` 新增断言：真实 AgentLoop 跑一轮后，`memory-manager` 消息恰好一条、且 `runtime-context` 消息里不包含我们的注入正文。
+
+**复核确认「未变 / 无影响」的集成面**
+
+- `packages/core/session`：`SESSION_FORMAT_VERSION` 仍为 **4**；`src/surface.ts` 的 diff **只有注释**（`SurfaceOp` 替换字段、`sourceEventSeqs` 完整覆盖、`tool/result` 只能改 `content`、`assistant/message` 禁止携带 source 全部照旧）；`Session.append` 内部抽出了 `commit()`，`validateNext` 仍在 `log.push` 之前。
+- `packages/core/tools`：`defineTool` / `ToolDefinition` / `ToolRunContext` 契约只改了注释；变化集中在 PTC（`ToolPresentationMode` 移除 `both`、SDK renderer 新增 `programFormat`、新增 `ptc-calls.ts`）——本插件不使用 PTC 展示模式。
+- `packages/core/agent`、`agent-loop`：`agent/pre-step` / `agent/created` 声明只改文档链接；`Agent.inject/steer` 语义未变。
+- `packages/host/webserver`：362 行改动全部是 **TLS / 监听地址**支持，`WebRoute` 与 `register({kind,path,handler})` 未变。
+- `packages/client/connection`：新增 Peer/Principal 模型（`browserPeer`、`createPeer`、`admitConnection`），`rpc.intercept('/api', matches, handler)` 签名未变，handler 的第 4 参 `peer` 语义变了但本插件不读它。
+- `packages/client/modules`：新增 boot 图的 `release` 字段与 `lazyBody` 失败重试修正；**`dsh.client` 发现与 `ClientBundleRegistration` 未变**。
+- `packages/client/web`：seed word 新增 `zod`、`@tanstack/react-virtual`，`react` 仍在。
+- `packages/client/ui-slots`：只新增可选 `inline?: true`。
+- `packages/client/ui-chat` / `ui-conversation`：`ChatSnapshot` 仍是 `order` + `nodes`（`ChatNodeStore`），`data-chat-node-key` / `data-chat-anchor-key` / `[data-conversation-scroll]` 均未变；`AssistantActionOwnerProps` 仍是 `{ messageId }`；5 个目标插槽仍全部为 `list` 型、`replaceRisk: none`。新增若干扩展位（`conversation.input.model.label`、用户消息/文本/图片、新会话页、模型选择器、header 子槽）均为增量。
+- `packages/client/ui-workspace`：`openSession(target)` 未变；`ui-layout` 的 `selectPanel(null)` 未变。
+- `packages/llm/llm`：`GenerateOptions` 无变化（新增的是 provider 描述字段与文档措辞）。
+- `packages/session-query`：`listSessions()` 记录新增可选 `formatStatus`，`readSurface` / `readTitle` / `readSession` 未变；`tool-session-query` 整包被删除，本插件不使用。
+- `packages/workspace`：`sessionIds` 过滤对「目录已不存在（ENOENT）」更宽容，`.path` / `.id` / `.sessionIds` 接口未变。
+- 其他官方变更中与本插件无关的：移除各包 `./invariant` 导出与运行时 invariant 插件（插件未引用）、输入区统计扩展拆成 `activity`/`usage`（插件未注册）、`--from-default-profile` 覆盖语义、Azure 提供方改名、API Key 读取优先级。
+
+**工具与文档**
+
+- `scripts/preflight.mjs`：新增 3 项 `engines.dsh` 检查（已声明 / 非 `workspace:` / 上界排除 0.3.0）；准入校验改用 `issue.requirements ?? issue.peers`（0.2.1 把字段名从 `peers` 改成 `requirements`）；新增「内核确实按 `engines.dsh` 判定」的验证（把 peer 改成不可满足后仍应放行）。检查项 31 → **35**（离线 23 → **26**）。
+- README「兼容性」表新增「版本声明」与「会话格式」两行，全部 0.2.1 结论落表；INSTALL 重写「版本兼容」为 0.2.1 规则（含 `engines.dsh` 优先、`runtime-context` 保留 kind、其余集成面未变）；ARCHITECTURE 更新版本基线、集成面表与注入机制；API 补充保留 kind 说明；DEVELOPMENT 更新版本与检查项计数。
+
+### 验证
+
+- `npm test`：preflight（35 项）+ Host apply 回归 + Client 冒烟，全绿。
+- `DSH_ROOT=D:\deepseekagent\LatestVersion\deepseek-harness npm run test:dsh020`：6 套真实内核契约测试全绿（Cordis 20 / settings 13 / tools 11 / client-slots 20 / surface 12 / pre-step e2e **15**）。
+- DSH 自带的 `evaluatePluginCompatibility(0.2.1-rc.2)` 返回 `undefined`（放行），且验证了「声明 `engines.dsh` 后 peer 不再参与准入」。
+
 ## [0.5.0] - 2026-09-30
 
 ### 复验 DSH 0.2.0-rc.2（无需改代码）

@@ -4,7 +4,7 @@
 
 **设计原则（0.5.0 起）**：只依赖 DSH 最稳定的核心扩展点（volatile `Config` / `ctx.settings.update` / `tools` / `agent` 事件 / `webServer` / `sessionQuery`），功能全部自包含实现，官方插件包一律不依赖；官方升级的影响面被压缩为「个别能力降级」，而不是「加载失败」。
 
-> **版本基线**：实现按 **0.2.0-rc.1** 逐条核对，并在 **0.2.0-rc.2** 上复验 —— 两版之间本文件列出的集成面（见下表）**逐文件 diff 无源码变更**，通过的准入校验为 DSH 自带的 `evaluatePluginCompatibility`（对照运行版本 `0.2.0-rc.2`）。
+> **版本基线**：0.5.1 面向 **DSH 0.2.1-rc.2**。核对方式是对 `dsh-v0.2.0-rc.2 → dsh-v0.2.1-rc.2`（1482 次提交）做逐路径 diff：本文件列出的集成面**没有破坏性变更**（`packages/core/session/src/surface.ts` 只改注释、`defineTool` 只改注释、`agent/pre-step` 的 `runtime-types.ts` 只改文档链接、`webserver` 只新增 TLS 监听），唯一需要跟进的是新增的 `engines.dsh` 准入机制（已在 `package.json` 声明）。通过 DSH 自带的 `evaluatePluginCompatibility`（对照运行版本 `0.2.1-rc.2`）与 6 套真实内核回归测试。
 
 ## 架构总览（ASCII）
 
@@ -54,13 +54,14 @@
 
 ## 与 DSH 的集成面（适配层）
 
-| 能力 | 实现（0.2.0） | 缺失时降级 |
+| 能力 | 实现（0.2.x） | 缺失时降级 |
 |---|---|---|
+| 版本声明 | `engines.dsh: ">=0.1.2-rc.1 <0.3.0"`（0.2.1+ 单独决定准入）+ 可选 peer `@deepseek-ai/dsh-tools`（0.2.0 及更早按 peer 判） | 范围外只拒绝本 bundle，不影响 profile 其它行 |
 | 配置 | 导出 schemastery `Config`（字段全 `.volatile()`）；DSH 设置页投影表单；写回 `ctx.settings.update(profile entry id, patch)`（ns 取 `ctx.fiber.entry.options.id`） | 无 settings 服务时仅进程内配置；无 `.volatile()` 时无设置页 |
 | 配置热更新 | `ctx.on('loader/volatile-update')` → `m.syncCfg()` 重新解包 volatile 引用 | 仍然每次写前读一次引用，不依赖事件也会生效 |
 | 记忆面板 / 浮层 | `ctx.slots.inject(name, () => ctx.slots.register({name,id,order,label}, Component))` | 客户端不注册插槽 |
 | Agent 工具 | `ctx.tools.register(defineTool({ name, description, parameters, output:{schema,render}, execute }))` | 不注册工具 |
-| 上下文注入 | `agent/pre-step` 瀑布返回 `{kind:'enter', messages:[..., snapshot]}`（`source.kind:'memory-manager'`, `form:'snapshot'`, `sections`） | 不注入 |
+| 上下文注入 | `agent/pre-step` 瀑布返回 `{kind:'enter', messages:[..., snapshot]}`（`source.kind:'memory-manager'`, `form:'snapshot'`, `sections`）。**不得复用 `runtime-context`**：0.2.1 起循环会把该 kind 的消息替换成刷新后的运行时上下文（`lib/util.js` 有静态断言） | 不注入 |
 | 新会话判定/预载 | `agent/created`（`global:true`）+ `ctx.sessions` / `sessionQuery` | 手动加入计划 |
 | 会话读取 | live `ctx.sessions.get(id)`；只读 `ctx.sessionQuery.readSurface()` | 对应功能报「会话不存在或不在线」 |
 | 会话列表 | `ctx.workspaceRegistry`（list/archivedSessionIds）+ `ctx.sessionQuery.readTitle`；无工作区服务时回退 `sessionQuery.listSessions()` | 仅返回空结构 |
@@ -123,6 +124,7 @@
 - **注入消息（agent/pre-step）**：注册 `agent/pre-step` 瀑布（`prepend: true`）。监听器 `await next()` 得到 `{kind:'enter', messages}` 决策；仅当**用户消息触发**（`payload.messages` 含 `source.kind==='user'`）时，先 `await m.ensureInjectionReady(sessionId)` 补齐懒加载的计划与记忆索引，再向消息末尾追加一条 user 消息（`source: { kind: 'memory-manager', form: 'snapshot', sections: [{ name: 'memory-manager:context', text }] }`），模型可见、UI 折叠显示、随会话日志持久化（满足「模型可见即已记录」不变式）。
   - **懒加载竞态**：`loadPlan()`（由 `agent/created` 预载或 HTTP 触发）与 `scanLibrary()`（install 里后台跑）都是异步的，首个用户请求可能早于它们完成 —— 不补齐就会**第一轮静默不注入**。`ensureInjectionReady` 在渲染前 await 两者（都带缓存，命中后 O(1)），由 `tests/test-pre-step-e2e-020.mjs` 的真实 AgentLoop 端到端回归守护。
   - **0.2.0 契约**：`MessageSource` 是 merge-extensible 判别联合，明确没有通用 `'plugin'` kind —— 生产者声明自己的 `kind`（官方 `time-context` 即 `kind:'time-context'`）。`form:'snapshot'` 必须携带 `sections`。历史会话里 0.1.x 写入的 `{ kind:'plugin', plugin:'memory-manager' }` 仍被 `lib/util.js` 的 `isOwnSource` 识别。
+  - **0.2.1 新增分流**：`agent-loop` 在 append 决策消息前按 `source.kind` 分流——`runtime-context` 那条会被替换成瀑布之后 `systemPrompt.refreshContext()` 重新投影的运行时上下文（`packages/core/agent-loop/src/agent.ts` 的 `contextAdmitted` 分支），其余 kind 原样追加。因此插件**不得**复用该保留 kind；`lib/util.js` 对 `PLUGIN_KIND !== 'runtime-context'` 做了静态断言，端到端测试也断言注入消息未被替换逻辑吞掉。
   - 不依赖 `systemPrompt`（极简 complete 模式也生效）；不依赖 `includeRuntimeContext` 门控。
 - **按需激活**：`cfg.mode === 'on'` 或 `plan.injectOnce === true` 或 once 队列非空时渲染。
 - **预算分配**：先固定消息（上限 `min(pinChars, totalChars)`），再勾选记忆（单条 `memoryChars`、总量 `totalChars`），再一次性队列；紧凑视图只注入标题 + 印象 + 300 字预览。

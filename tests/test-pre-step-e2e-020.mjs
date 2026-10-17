@@ -153,6 +153,19 @@ if (injected) {
   check('注入消息的 role 为 user（0.2.0 表面要求可上表面事件携带 surfaceOp）', injected.role === 'user', String(injected.role))
 }
 
+// ---------- DSH 0.2.1 的 runtime-context 替换逻辑不得吞掉我们的消息 ----------
+// 0.2.1 起循环在 append 前按 source.kind 分流：`runtime-context` 的那条会被**替换**成
+// 瀑布之后 refreshContext() 重新投影的运行时上下文（agent-loop/src/agent.ts 的 contextAdmitted），
+// 其它 kind 原样 append。插件必须用自己的 kind，否则注入会被静默替换掉。
+{
+  const injectedCount = messages.filter((m) => m && m.source && m.source.kind === 'memory-manager').length
+  const runtimeContexts = messages.filter((m) => m && m.source && m.source.kind === 'runtime-context')
+  const leakedIntoRuntimeContext = runtimeContexts.some((m) => JSON.stringify(m.content ?? '').includes('记忆库上下文'))
+  check('注入消息未被 0.2.1 的 runtime-context 替换逻辑吞掉',
+    injectedCount === 1 && !leakedIntoRuntimeContext,
+    `memory-manager=${injectedCount} runtime-context=${runtimeContexts.length} leaked=${leakedIntoRuntimeContext}`)
+}
+
 // ---------- 注入消息已作为 user/message 表面事件落盘 ----------
 {
   const events = agent.session.snapshotEvents ? agent.session.snapshotEvents() : []

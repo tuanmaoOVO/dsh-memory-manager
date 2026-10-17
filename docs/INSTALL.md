@@ -4,27 +4,27 @@
 
 ## 前置条件
 
-- Node.js ≥ 22.19（DSH 0.2.0 要求 `^22.19.0 || >=24.0.0`）
+- Node.js ≥ 22.19（DSH 0.2.x 要求 `^22.19.0 || >=24.0.0`）
 - [pnpm](https://pnpm.io/zh/installation) —— `dsh plugin` 命令依赖 pnpm。未安装时先执行 `npm install -g pnpm`（或启用 corepack：`corepack enable`）
-- DSH CLI：`npx @deepseek-ai/dsh`（或全局安装 `@deepseek-ai/dsh`），本插件面向 **0.2.0-rc.1**
+- DSH CLI：`npx @deepseek-ai/dsh`（或全局安装 `@deepseek-ai/dsh`），本插件面向 **0.2.1-rc.2**（同时兼容 0.2.0-rc.1 / 0.2.0-rc.2）
 
 ## 安装前自检（建议先跑一次）
 
 ```bash
-node scripts/preflight.mjs "D:/deepseekagent/version0.2.0-rc.1/deepseek-harness"
+node scripts/preflight.mjs "D:/deepseekagent/LatestVersion/deepseek-harness"
 # 或：DSH_ROOT=<DSH 检出路径> npm run preflight
 ```
 
-**31 项**检查，把「装上后不影响 DSH 本体」变成机械结论（下面是它的检查面，也是本插件的安全边界）。带上检出路径时，它会用 **DSH 自己的准入校验**（`packages/boot/app-boot` 的 `evaluatePluginCompatibility`）跑一遍，并打印对照到的运行版本（例如 `0.2.0-rc.2`）——与 DSH 装载 profile 时对每个 bundle 做的是同一段判定：
+**35 项**检查，把「装上后不影响 DSH 本体」变成机械结论（下面是它的检查面，也是本插件的安全边界）。带上检出路径时，它会用 **DSH 自己的准入校验**（`packages/boot/app-boot` 的 `evaluatePluginCompatibility`）跑一遍，并打印对照到的运行版本（例如 `0.2.1-rc.2`）——与 DSH 装载 profile 时对每个 bundle 做的是同一段判定；还会验证「声明了 `engines.dsh` 后 peer 不再参与准入」这一 0.2.1 新规则：
 
 | 组 | 保证 | 检查项 |
 |---|---|---|
 | A 包自洽 | 装上去能跑，不会因为缺文件把宿主的客户端模块图整体搞坏 | `dsh.bundle.patch` 存在；`exports["."]` / `exports["./client"]` 指向的文件都存在；`files` 白名单覆盖这些文件；运行时依赖已声明；**未声明 `dsh.profile`**（永远不能充当或替换 profile 组合） |
-| B 只增不改 | 只影响自己这一行，不动 profile 里的其它行 | bundle patch **只用 `insert`**（无 `remove` / `replace`）；插入行 `id: memory-manager` + `name` 等于本包名，不覆盖任何既有 id；未预设 `disabled`；所有 DSH peer 都是 **optional**（版本不匹配时只会拒绝本 bundle，不会波及其它行） |
+| B 只增不改 | 只影响自己这一行，不动 profile 里的其它行 | bundle patch **只用 `insert`**（无 `remove` / `replace`）；插入行 `id: memory-manager` + `name` 等于本包名，不覆盖任何既有 id；未预设 `disabled`；**声明 `engines.dsh`（0.2.1+ 的首选兼容性声明，一旦声明即单独决定准入）**、非 `workspace:` 范围、上界排除未验证的 0.3.0；旧内核按 peer 判定时所有 DSH peer 仍为 optional |
 | C 模块与 bundle 形状 | 插件自己的代码出问题，只让插件不可用 | 宿主模块可 import、`inject` 只声明核心服务（缺失即降级）；客户端 bundle 是标准的 `load({id, factory})` 单条顶层语句，工厂体整体包在 try/catch 内且预装惰性 `exports` —— **即使模块体抛错，也只会让这一个条目静默失效，不会中断同一批脚本里的其它插件包** |
-| D 与检出对照 | 不占用、不遮蔽官方的东西，且能被当前版本接纳 | **DSH 权威准入校验放行**（`evaluatePluginCompatibility` 返回 undefined）；`dsh.client.inject` 的每个包真实存在且声明 `dsh.client`；5 个目标插槽在 0.2.0 目录中都是 **list 型**（只增不替换）且非 `shadows-shipped-ui`；我们的 entry id 未占用官方已注册 id；6 个模型工具名不与官方工具重名（对照 65 个已发布工具） |
+| D 与检出对照 | 不占用、不遮蔽官方的东西，且能被当前版本接纳 | **DSH 权威准入校验放行**（`evaluatePluginCompatibility` 返回 undefined）；**内核确实按 `engines.dsh` 判定**（把 peer 改成不可满足后仍放行）；`dsh.client.inject` 的每个包真实存在且声明 `dsh.client`；5 个目标插槽在 0.2.1 目录中都是 **list 型**（只增不替换）且非 `shadows-shipped-ui`；我们的 entry id 未占用官方已注册 id；6 个模型工具名不与官方工具重名（对照 68 个已发布工具） |
 
-> 不带检出路径时只跑 A/B/C（23 项）。退出码 0 = 通过。
+> 不带检出路径时只跑 A/B/C（26 项）。退出码 0 = 通过。
 
 ## 方式一：Web 插件页（推荐，最省事）
 
@@ -128,15 +128,25 @@ dsh plugin --profile web add link:D:/dshTools/dsh-memory-manager
 - **`dsh: pnpm not found on PATH`**：先安装 pnpm（见前置条件），再重试。
 - **`dsh: a local path must be absolute`**：安装 spec 必须用绝对路径（或 `file:` / `link:` + 绝对路径），相对路径会被拒绝。
 - **工具不可用（`记忆管理已禁用`）**：`enabled` 为 `false`，到设置页打开；或 `modelTools` 为 `false`。
-- **记忆库为空**：`libraryPath` 未指向含 `memories/*.md` 的目录。可用仓库里的 `examples/memory-library/` 快速体验，或在面板里设置实际路径。
+- **记忆库为空**：`libraryPath` 未指向含 `memories/*.md` 的目录。到「设置 → 记忆管理 → 记忆库」看那一行诊断：**当前生效路径 · 条数 · 手动/自动**。
+  - 0.5.2 起自动锚点会**优先选择已有记忆的候选库**（不再盲取工作区列表第一个），所以「新增工作区后记忆消失」这类漂移已修复。
+  - 若路径显示为「自动锚点」但目录不存在，点「恢复自动锚点」重新解析；仍不对就手动填绝对路径（可直接粘贴工作区根目录，或 `.dsh-memory` 目录本身）。
+  - 也可用仓库里的 `examples/memory-library/` 快速体验。
 
 ## 版本兼容
 
-面向 **DSH 0.2.0-rc 系列（rc.1 / rc.2 均已实测）**，同时保留 **0.1.2-rc.1 → 0.1.7-rc.2** 的降级兼容（客户端会话导航、Chat 数据、消息来源标识、`SurfaceOp` 字段名都有双路径适配，逐条见 [ARCHITECTURE.md「与 DSH 的集成面」](ARCHITECTURE.md#与-dsh-的集成面适配层)）。
+面向 **DSH 0.2.1-rc.2**（当前最新），并在 0.2.0-rc.1 / 0.2.0-rc.2 上复验过；同时保留 **0.1.2-rc.1 → 0.2.1-rc.2** 的降级兼容（客户端会话导航、Chat 数据、消息来源标识、`SurfaceOp` 字段名都有双路径适配，逐条见 [ARCHITECTURE.md「与 DSH 的集成面」](ARCHITECTURE.md#与-dsh-的集成面适配层)）。
 
-DSH 在装载 profile 时会用 `semver.satisfies(runtimeVersion, range, { includePrerelease: true })` 校验插件的 `@deepseek-ai/dsh-*` peer；本插件只声明可选的 `@deepseek-ai/dsh-tools`（`>=0.1.0 <0.3.0`），不满足时**只会拒绝本 bundle**，不会影响同一 profile 里的其它插件。`0.2.0-rc.1` / `0.2.0-rc.2` / `0.2.0` 都在该区间内，可用 `node scripts/preflight.mjs <检出>` 自带确认。
+**准入规则（0.2.1 起有变化）**：
 
-### 0.2.0-rc.2 的两点注意
+- **0.2.1+**：插件 `package.json` 的 `engines.dsh` **一旦声明就单独决定准入**，`peerDependencies` 被内核忽略。本插件声明 `engines.dsh: ">=0.1.2-rc.1 <0.3.0"`。
+- **0.2.0 及更早**：内核只看 `@deepseek-ai/dsh*` peer。本插件只声明可选的 `@deepseek-ai/dsh-tools`（`>=0.1.0 <0.3.0`）。
+- 两条都声明 → 新旧内核行为一致；不满足时**只会拒绝本 bundle**，不会影响同一 profile 里的其它插件。
+- 可用 `node scripts/preflight.mjs <检出>` 自带确认（它会调用 DSH 自己的 `evaluatePluginCompatibility`）。
 
-- **`desktop` 是保留 profile**：rc.2 起 `dsh plugin --profile desktop …` 要求该 profile 已被应用初始化（先打开一次 DeepSeek Harness Desktop 并完全退出），否则会提示 `Open DeepSeek Harness Desktop once to initialize its profile`。装到 Web 的 `web` profile 不受影响。
-- **rc.2 相对 rc.1 没有触及本插件的任何集成点**：`packages/core/{session,tools,agent,agent-loop}`、`packages/settings`、`packages/host/webserver`、`packages/llm/llm`、`packages/client/{modules,web,connection,ui-slots,ui-layout,ui-session,ui-settings,ui-workspace}`、`vendor/*` 在两版之间**无源码变更**（只有版本号 bump）；客户端插槽目录只新增了 `sidebar.right.tab.files.actions` 一个官方槽位。会话格式仍是 v4。
+### 0.2.1-rc.2 的三点注意
+
+- **`engines.dsh` 优先于 peer**（见上）。这是 0.2.1 唯一一处需要插件作者主动跟进的声明变更，官方更新记录明确写了「插件作者需检查声明是否覆盖支持的 DSH 版本」。
+- **`runtime-context` 成为保留的上下文 kind**：循环会在 append 前把该 kind 的消息替换成瀑布之后重新投影的运行时上下文。插件注入必须用自己的 kind（本插件用 `memory-manager`），否则会被静默吞掉。`lib/util.js` 里有静态断言防止复用。
+- **其余集成面未变**：`packages/core/session/src/surface.ts` 只改注释（`SurfaceOp` 替换规则、`sourceEventSeqs` 覆盖要求、`tool/result` 只能改 `content` 全部照旧）；`defineTool` 只改注释；`agent/pre-step` / `agent/created` 的声明只改文档链接；`webserver` 只新增 TLS 监听（`register({kind,path,handler})` 不变）；`ui-slots` 只新增可选 `inline`；客户端 seed word 新增 `zod` 与 `@tanstack/react-virtual`（`react` 仍在）；会话格式仍是 **v4**；`tool-session-query` 整包被删除，但本插件不使用它。
+- **`desktop` 是保留 profile**（0.2.0-rc.2 起）：`dsh plugin --profile desktop …` 要求该 profile 已被应用初始化（先打开一次 DeepSeek Harness Desktop 并完全退出），否则会提示 `Open DeepSeek Harness Desktop once to initialize its profile`。装到 Web 的 `web` profile 不受影响。

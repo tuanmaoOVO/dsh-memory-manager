@@ -297,6 +297,62 @@ check('sessions.list 返回工作区结构', res && res.value && Array.isArray(r
   check('迁移幂等（第二次不重复导入）', again === false && settingsWrites.length === 0)
 }
 
+// ================= 记忆库锚点解析（多工作区 / 新增工作区后不漂移） =================
+// DSH 的工作区是「新建即置顶」的：`workspaceRegistry.list()[0]` 永远是最近新建的那个。
+// 0.5.1 及以前直接取 list()[0]，用户新增一个工作区后锚点就漂到空目录 ——
+// 表现是「记忆库信息没了」。修复后按「像不像真的记忆库」排序。
+{
+  const root = mkdtempSync(join(tmpdir(), 'mem-anchor-'))
+  const dirA = join(root, 'wsA')
+  const dirB = join(root, 'wsB')
+  mkdirSync(join(dirA, '.dsh-memory'), { recursive: true })
+  mkdirSync(join(dirB, '.dsh-memory', 'memories'), { recursive: true })
+  // 记忆文件的 front-matter 由插件自己写成为 JSON 值（`tags: ["convention"]`），这里照抄该格式
+  writeFileSync(join(dirB, '.dsh-memory', 'memories', 'm_anchor.md'), '---\nid: "m_anchor"\ntitle: "锚点库里的记忆"\ntags: ["convention"]\n---\n\n## 快照\n\n锚点测试正文\n')
+
+  // dirA 是「最新工作区」（list 首位），但它的记忆库是空的；dirB 才有记忆
+  wsList = [{ path: dirA }, { path: dirB }]
+  res = await post({ op: 'state.clearLibrary' })
+  res = await post({ op: 'state.get' })
+  const cfgAuto = res && res.value && res.value.config
+  check('自动锚点跳过空库、选中已有记忆的库（不再盲取 list()[0]）',
+    cfgAuto && String(cfgAuto.libraryPath).replace(/\\/g, '/') === join(dirB, '.dsh-memory').replace(/\\/g, '/')
+    && cfgAuto.librarySource === 'auto' && cfgAuto.libraryMemoryCount === 1,
+    JSON.stringify(cfgAuto && { p: cfgAuto.libraryPath, s: cfgAuto.librarySource, n: cfgAuto.libraryMemoryCount }))
+
+  wsList = [{ path: dirB }, { path: dirA }]
+  await post({ op: 'state.clearLibrary' })
+  res = await post({ op: 'state.get' })
+  check('候选顺序变化不影响解析结果（仍锁定有记忆的库）',
+    res && res.value && res.value.config && String(res.value.config.libraryPath).replace(/\\/g, '/') === join(dirB, '.dsh-memory').replace(/\\/g, '/'),
+    JSON.stringify(res && res.value && res.value.config && res.value.config.libraryPath))
+
+  res = await post({ op: 'state.setLibrary', args: { path: dirA } })
+  res = await post({ op: 'state.get' })
+  check('显式设置的路径优先于自动锚点（粘贴工作区根目录会自动补 /.dsh-memory）',
+    res && res.value && res.value.config && res.value.config.librarySource === 'configured'
+    && String(res.value.config.libraryPath).replace(/\\/g, '/') === join(dirA, '.dsh-memory').replace(/\\/g, '/'),
+    JSON.stringify(res && res.value && res.value.config && { p: res.value.config.libraryPath, s: res.value.config.librarySource }))
+
+  // 没有任何候选：不能抛错，也不能把空计划钉进缓存（0.5.1 的 planCache 中毒 bug）
+  wsList = []
+  await post({ op: 'state.clearLibrary' })
+  res = await post({ op: 'state.get' })
+  const cfgNone = res && res.value && res.value.config
+  check('无候选时降级为「未解析」而不是抛错，且计划仍可读',
+    cfgNone && cfgNone.libraryPath === null && cfgNone.librarySource === 'none' && cfgNone.libraryExists === false
+    && res.value.plan && Array.isArray(res.value.plan.memories),
+    JSON.stringify(cfgNone && { p: cfgNone.libraryPath, s: cfgNone.librarySource }))
+
+  // 服务就绪后（工作区重新可用）必须能恢复出记忆，而不是继续返回缓存的空计划
+  wsList = [{ path: dirA }, { path: dirB }]
+  res = await post({ op: 'state.get' })
+  check('路径未解析时不会把空计划钉死（就绪后自动恢复）',
+    res && res.value && res.value.config && String(res.value.config.libraryPath).replace(/\\/g, '/') === join(dirB, '.dsh-memory').replace(/\\/g, '/')
+    && Array.isArray(res.value.plan.memories) && res.value.plan.memories.length >= 1,
+    JSON.stringify(res && res.value && res.value.config && res.value.config.libraryPath))
+}
+
 await disposer()
 console.log('[test] dispose OK')
 if (failed) { console.error('[test] FAILED: ' + failed); process.exit(1) }

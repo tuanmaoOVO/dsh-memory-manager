@@ -105,12 +105,23 @@ check('bundle patch 只使用 insert（不 remove / 不覆盖既有行）',
     Boolean(idMatch) && idMatch[1] === 'memory-manager', idMatch ? idMatch[1] : '?')
 }
 {
+  // DSH 0.2.1 起：`engines.dsh` 一旦声明就**单独决定**准入，peerDependencies 被忽略
+  // （packages/boot/app-boot/src/plugin-compatibility.ts 的 unmetRequirements；
+  //   0.2.0-rc.2 及更早只认 @deepseek-ai/dsh* peer）。两条都声明时：
+  //   新内核按 engines.dsh，旧内核按 peer —— 行为一致。
+  const dshEngine = pkg.engines && pkg.engines.dsh
+  check('声明了 engines.dsh（DSH 0.2.1+ 的首选兼容性声明，一旦声明即单独决定准入）',
+    typeof dshEngine === 'string' && dshEngine.trim() !== '', JSON.stringify(dshEngine))
+  check('engines.dsh 不是 workspace: 范围（内核视为不满足）',
+    typeof dshEngine !== 'string' || !/workspace:/.test(dshEngine), String(dshEngine))
+  check('engines.dsh 排除未验证的 0.3.0（上界 <0.3.0）',
+    typeof dshEngine === 'string' && /<\s*0\.3(\.0)?\b/.test(dshEngine), String(dshEngine))
   const dshPeers = Object.entries(pkg.peerDependencies ?? {}).filter(([n]) => n === '@deepseek-ai/dsh' || n.startsWith('@deepseek-ai/dsh-'))
   const optionalMeta = pkg.peerDependenciesMeta ?? {}
   const notOptional = dshPeers.filter(([n]) => !(optionalMeta[n] && optionalMeta[n].optional === true)).map(([n]) => n)
-  check('所有 DSH peer 都是 optional（不满足时只拒绝本 bundle，不影响其它行）',
+  check('所有 DSH peer 都是 optional（0.2.0 及更早的内核按 peer 判定时只拒绝本 bundle，不波及其它行）',
     notOptional.length === 0, notOptional.join(', '))
-  check('DSH peer 范围宽松（不会因版本区间过窄被宿主拒绝装载）',
+  check('DSH peer 范围宽松（旧内核按 peer 判定时不会过窄）',
     dshPeers.every(([, range]) => typeof range === 'string' && /[<>]=?|\^|~|\*|x/.test(range)),
     dshPeers.map(([n, r]) => `${n}@${r}`).join(', '))
 }
@@ -157,19 +168,29 @@ if (!checkout) {
   check('DSH 检出路径存在', true, checkout)
 
   // 用 DSH **自己的准入校验**（app-boot 的 evaluatePluginCompatibility）判定：
-  // 它在装载 profile 时对每个 bundle 的 @deepseek-ai/dsh-* peer 调用的就是这一段。
+  // 它在装载 profile 时对每个 bundle 调用的就是这一段（0.2.1 起优先 engines.dsh，否则看 dsh peer）。
   // 需要该检出已构建 packages/boot/app-boot/lib/index.js。
   const appBoot = `${checkout}/packages/boot/app-boot/lib/index.js`
   if (!existsSync(appBoot)) {
-    skip('peer 兼容性（DSH 权威校验）', `${appBoot} 不存在（先在该检出 pnpm run build:lib:host）`)
+    skip('兼容性（DSH 权威校验）', `${appBoot} 不存在（先在该检出 pnpm run build:lib:host）`)
   } else {
     try {
       const boot = await import(pathToFileURL(appBoot).href)
       const runtime = boot.getDshRuntimeVersion()
       const issue = boot.evaluatePluginCompatibility(pkg, {}, runtime)
+      // 0.2.0-rc.2 的字段名是 `peers`，0.2.1 起改为 `requirements`，两者都兼容
+      const unmet = issue && (issue.requirements ?? issue.peers)
       check(`DSH ${runtime} 的准入校验放行本插件（evaluatePluginCompatibility 返回 undefined）`,
         issue === undefined,
-        issue ? `不满足的 peer: ${JSON.stringify(issue.peers)}` : '')
+        unmet ? `不满足的要求: ${JSON.stringify(unmet)}` : '')
+      // 再确认一下内核是按哪条规则判的：声明了 engines.dsh 就应当只按它判
+      const manifestWithBadPeer = { ...pkg, peerDependencies: { ...(pkg.peerDependencies ?? {}), '@deepseek-ai/dsh-tools': '>=99.0.0' } }
+      const badPeerIssue = boot.evaluatePluginCompatibility(manifestWithBadPeer, {}, runtime)
+      const enginesDecides = Boolean(pkg.engines && pkg.engines.dsh)
+        ? badPeerIssue === undefined
+        : badPeerIssue !== undefined
+      check('内核按预期规则判定（声明 engines.dsh 时 peer 不再参与准入）', enginesDecides,
+        enginesDecides ? '' : `engines.dsh=${JSON.stringify(pkg.engines && pkg.engines.dsh)} badPeerIssue=${Boolean(badPeerIssue)}`)
       console.log(`       运行版本：${runtime}（对照来源 ${checkout}）`)
     } catch (error) {
       check('DSH 权威准入校验可执行', false, String((error && error.message) || error))

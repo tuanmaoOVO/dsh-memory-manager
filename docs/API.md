@@ -135,6 +135,8 @@
 
 > **0.2.0 来源标识**：DSH 0.2.0 的 `MessageSource` 是 merge-extensible 判别联合，明确「there is no shared catch-all `plugin` kind」——每个生产者声明自己的 `kind`。本插件因此用 `kind: 'memory-manager'`；`form: 'snapshot'` 按内核契约**必须**携带 `sections`。历史会话里 0.1.x 写入的 `{ kind: 'plugin', plugin: 'memory-manager' }` 仍被识别（排除标记的恢复逻辑依赖它）。
 >
+> **0.2.1 保留 kind**：`runtime-context` 是内核保留的运行时上下文生产者 kind。0.2.1 起 `agent-loop` 在 append 前按 `source.kind` 分流——该 kind 的消息会被替换成瀑布之后 `systemPrompt.refreshContext()` 重新投影的运行时上下文，而不是原样追加。插件若借用它，注入会被**静默吞掉**；本插件固定用 `memory-manager`，并在 `lib/util.js` 里对「不得等于 `runtime-context`」做了静态断言。
+>
 > **为什么不用 `systemPrompt.section`**：极简模式（persona `complete: true`）会让 `assemble()` 丢弃所有其他 sections，注入内容从未进入模型请求（2026-08-15 实测修复）。`agent/pre-step` 消息注入与 complete section、`includeRuntimeContext` 均无关，任何会话形态都生效。
 
 注入文本包裹格式：
