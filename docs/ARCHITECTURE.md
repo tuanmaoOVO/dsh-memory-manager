@@ -4,7 +4,7 @@
 
 **设计原则（0.5.0 起）**：只依赖 DSH 最稳定的核心扩展点（volatile `Config` / `ctx.settings.update` / `tools` / `agent` 事件 / `webServer` / `sessionQuery`），功能全部自包含实现，官方插件包一律不依赖；官方升级的影响面被压缩为「个别能力降级」，而不是「加载失败」。
 
-> **版本基线**：0.5.1 面向 **DSH 0.2.1-rc.2**。核对方式是对 `dsh-v0.2.0-rc.2 → dsh-v0.2.1-rc.2`（1482 次提交）做逐路径 diff：本文件列出的集成面**没有破坏性变更**（`packages/core/session/src/surface.ts` 只改注释、`defineTool` 只改注释、`agent/pre-step` 的 `runtime-types.ts` 只改文档链接、`webserver` 只新增 TLS 监听），唯一需要跟进的是新增的 `engines.dsh` 准入机制（已在 `package.json` 声明）。通过 DSH 自带的 `evaluatePluginCompatibility`（对照运行版本 `0.2.1-rc.2`）与 6 套真实内核回归测试。
+> **版本基线**：0.5.3 面向 **DSH 0.2.1-rc.4**（当前最新稳定版）。核对方式是对 `dsh-v0.2.1-rc.2 → dsh-v0.2.1-rc.4` 做逐路径 diff：本文件列出的集成面**没有破坏性变更** —— 只动了 `ui-conversation`（新增 More 菜单插槽 `conversation.session.header.views.actions`、输入层新增 `whenDraftExists`）、`ui-workspace/navigation.ts`（`openSession` 签名不变，内部按草稿策略复用空白会话）、`session-controller` 的客户端会话服务（注释级）与插槽目录（新增 3 个官方槽位）。更早的 `0.2.0-rc.2 → 0.2.1-rc.2` 变更（`engines.dsh` 准入机制、`runtime-context` 保留 kind）已在 0.5.1 跟进。通过 DSH 自带的 `evaluatePluginCompatibility`（对照运行版本 `0.2.1-rc.4`）与 6 套真实内核回归测试。
 
 ## 架构总览（ASCII）
 

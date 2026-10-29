@@ -71,7 +71,7 @@
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 目录结构、测试与验证方法 |
 | [CONVENTIONS.md](CONVENTIONS.md) | 一份可直接使用的「委派-验证-复盘闭环」规约示例（接入为规约记忆后新会话自动注入） |
 
-**兼容性**：面向 DSH `0.2.1-rc.2`，同时兼容 `0.1.2-rc.1 → 0.2.1-rc.2`；只依赖 DSH 核心扩展点，官方包一律不依赖。细节见 [INSTALL.md 的版本兼容](docs/INSTALL.md#版本兼容)。
+**兼容性**：面向 DSH `0.2.1-rc.4`（当前最新稳定版），同时兼容 `0.1.2-rc.1 → 0.2.1-rc.4`；只依赖 DSH 核心扩展点，官方包一律不依赖。细节见 [INSTALL.md 的版本兼容](docs/INSTALL.md#版本兼容)。
 
 ## English Summary
 

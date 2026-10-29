@@ -4,6 +4,32 @@
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-10-29
+
+### 适配 DSH 0.2.1-rc.4（无需改代码）
+
+核对依据：`dsh-v0.2.1-rc.2 → dsh-v0.2.1-rc.4` 逐路径 `git diff`，并对 `dsh-v0.2.1-rc.2 → rc.3`、`rc.3 → rc.4` 两段分别核对。**插件集成面没有破坏性变更**，本版只做验证与文档同步。
+
+**rc.3 / rc.4 实际改动面（与插件相关部分）**
+
+- **新增「更多」菜单（rc.3）**：`ui-conversation` 的插槽契约新增 3 个官方槽位——`conversation.session.header.views.actions`（View 标签行的 More 菜单，root 作用域）、`sidebar.panellist.actions`、`sidebar.right.tab.guide.actions`。全部为**纯增量**，本插件不占用。
+- **本插件两个会话内座位的渲染位置未变**：`conversation.session.header.actions` 仍渲染在 `ConversationSession.tsx`（View 行与 utilities 之间），`conversation.input.left` 仍渲染在 `InputBar.tsx`。
+- **草稿修复（rc.3）**：`ui-conversation` 的 `contract/input.ts` 新增 `whenDraftExists: 'replace' | 'append' | 'keep'`（`clearPreviousDraft` 保留为兼容别名）；`ui-workspace/navigation.ts` 的 `openSession(target: SessionTarget): void` **签名未变**，内部改为按草稿策略复用空白会话并跳过预置不同的空白成员。本插件只传会话 id，不受影响。
+- **ACP 诊断输出修复（rc.4）**：CLI / 宿主层，与插件集成面无关。
+- **其余集成点两版之间无源码变更**：`core/{session,tools,agent,agent-loop}`、`settings`、`host/webserver`、`llm`、`client/{ui-slots,modules,web,connection}`、`session-query`、`workspace` 均无改动；工具目录没有新增工具（仍 68 个，无重名）；会话格式仍是 **v4**。
+- **`packages/api/session-controller/src/client/sessions/service.ts`**：diff 仅为注释。
+
+**验证**
+
+- `node scripts/preflight.mjs <rc.4 检出>`：**35 项全过**，`evaluatePluginCompatibility(0.2.1-rc.4)` 放行，并验证「声明 `engines.dsh` 后 peer 不再参与准入」。
+- `npm test`：preflight + Host apply 回归 + Client 冒烟，全绿。
+- `DSH_ROOT=<rc.4 检出> npm run test:dsh020`：6 套真实内核契约测试全绿（20 / 13 / 11 / 20 / 12 / 15）。
+
+**文档**
+
+- README / INSTALL / ARCHITECTURE / DEVELOPMENT 的版本基线由 rc.2 更新为 **rc.4**。
+- INSTALL 新增「0.2.1-rc.3 / rc.4 的注意」小节，并标注 **`0.2.2-alpha.2` 尚未验证**：该版本对 `api/session-controller`（新增 `history/` / `state/` / `web/` 控制器、删除 `model-selection-projection.ts`）与 `ui-chat`（`ChatFlow` / `ChatNodeSeat` 等）有较大重构，而 `session-controller` 在插件的 `dsh.client.inject` 列表里。`engines.dsh` 仍为 `>=0.1.2-rc.1 <0.3.0`（因此 0.2.2-alpha 会被放行），升级到 0.2.2+ 前建议先跑 preflight 并留意面板 / 跳转 / 注入。
+
 ## [0.5.2] - 2026-10-17
 
 ### 修复：新增工作区后「记忆库看起来空了」

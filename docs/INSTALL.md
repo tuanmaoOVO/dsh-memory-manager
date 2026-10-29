@@ -135,14 +135,21 @@ dsh plugin --profile web add link:D:/dshTools/dsh-memory-manager
 
 ## 版本兼容
 
-面向 **DSH 0.2.1-rc.2**（当前最新），并在 0.2.0-rc.1 / 0.2.0-rc.2 上复验过；同时保留 **0.1.2-rc.1 → 0.2.1-rc.2** 的降级兼容（客户端会话导航、Chat 数据、消息来源标识、`SurfaceOp` 字段名都有双路径适配，逐条见 [ARCHITECTURE.md「与 DSH 的集成面」](ARCHITECTURE.md#与-dsh-的集成面适配层)）。
+面向 **DSH 0.2.1-rc.4**（当前最新稳定版），并在 0.2.1-rc.2 / 0.2.0-rc.1 / 0.2.0-rc.2 上复验过；同时保留 **0.1.2-rc.1 → 0.2.1-rc.4** 的降级兼容（客户端会话导航、Chat 数据、消息来源标识、`SurfaceOp` 字段名都有双路径适配，逐条见 [ARCHITECTURE.md「与 DSH 的集成面」](ARCHITECTURE.md#与-dsh-的集成面适配层)）。
 
 **准入规则（0.2.1 起有变化）**：
 
-- **0.2.1+**：插件 `package.json` 的 `engines.dsh` **一旦声明就单独决定准入**，`peerDependencies` 被内核忽略。本插件声明 `engines.dsh: ">=0.1.2-rc.1 <0.3.0"`。
+- **0.2.1+**：插件 `package.json` 的 `engines.dsh` **一旦声明就单独决定准入**，`peerDependencies` 被内核忽略。本插件声明 `engines.dsh: ">=0.1.2-rc.1 <0.3.0"`（覆盖 rc.3 / rc.4；`0.2.2-alpha` 也在区间内但**尚未验证**，见下）。
 - **0.2.0 及更早**：内核只看 `@deepseek-ai/dsh*` peer。本插件只声明可选的 `@deepseek-ai/dsh-tools`（`>=0.1.0 <0.3.0`）。
 - 两条都声明 → 新旧内核行为一致；不满足时**只会拒绝本 bundle**，不会影响同一 profile 里的其它插件。
 - 可用 `node scripts/preflight.mjs <检出>` 自带确认（它会调用 DSH 自己的 `evaluatePluginCompatibility`）。
+
+### 0.2.1-rc.3 / rc.4 的注意
+
+- **rc.3 新增的「更多」菜单是纯增量**：新增根作用域插槽 `conversation.session.header.views.actions`（View 标签行的 More 菜单）、`sidebar.panellist.actions`、`sidebar.right.tab.guide.actions`。本插件不占用它们，`conversation.session.header.actions` 仍渲染在 `ConversationSession.tsx` 头部（View 行与 utilities 之间），`conversation.input.left` 仍渲染在 `InputBar.tsx`。
+- **rc.3 的草稿修复只动客户端输入层**：`ui-conversation` 的 `contract/input.ts` 新增 `whenDraftExists: 'replace' | 'append' | 'keep'`，`ui-workspace` 的 `openSession()` **签名未变**（`openSession(target: SessionTarget): void`），内部改为按草稿策略复用空白会话。本插件只传会话 id，不受影响。
+- **rc.4 的 ACP 诊断修复在 CLI/宿主层**，与插件集成面无关；其余集成点（`core/{session,tools,agent,agent-loop}`、`settings`、`host/webserver`、`llm`、`client/{ui-slots,modules,web,connection}`、`session-query`、`workspace`）两版之间**无源码变更**。
+- **尚未验证**：`0.2.2-alpha.2` 对 `api/session-controller`（新增 `history/` / `state/` / `web/` 控制器、删除 `model-selection-projection.ts`）与 `ui-chat`（`ChatFlow` / `ChatNodeSeat` 等）有较大重构，本插件在该版本上**未做验证**。若要试用 0.2.2+，请先跑 `node scripts/preflight.mjs <该版本检出>` 并留意面板 / 跳转 / 注入是否正常。
 
 ### 0.2.1-rc.2 的三点注意
 

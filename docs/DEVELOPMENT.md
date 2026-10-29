@@ -1,6 +1,6 @@
 # 开发指南
 
-面向想要修改、测试或发布本插件的开发者。**0.5.1 起本插件面向 DSH 0.2.1-rc.2**（实测检出：`D:\deepseekagent\LatestVersion\deepseek-harness`，tag `dsh-v0.2.1-rc.2`；对 `dsh-v0.2.0-rc.2 → dsh-v0.2.1-rc.2` 做了逐路径 diff，集成面无破坏性变更，唯一跟进项是新增的 `engines.dsh` 准入机制），同时保留对 0.1.2-rc.1 → 0.2.1-rc.2 的降级兼容；设计原则与迁移要点见 `README.md`「兼容性」章节。Node 需 ≥18（DSH 0.2.x 要求 ^22.19 或 ≥24，测试脚本用到 `structuredClone`）。
+面向想要修改、测试或发布本插件的开发者。**0.5.3 起本插件面向 DSH 0.2.1-rc.4**（实测检出：`D:\deepseekagent\LatestVersion\deepseek-harness`，tag `dsh-v0.2.1-rc.4`；对 `dsh-v0.2.1-rc.2 → dsh-v0.2.1-rc.4` 做了逐路径 diff，集成面无破坏性变更，rc.3 的 More 菜单插槽与草稿策略均为增量），同时保留对 0.1.2-rc.1 → 0.2.1-rc.4 的降级兼容；设计原则与迁移要点见 `README.md`「兼容性」章节。Node 需 ≥18（DSH 0.2.x 要求 ^22.19 或 ≥24，测试脚本用到 `structuredClone`）。
 
 ## 目录结构
 
