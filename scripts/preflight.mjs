@@ -197,6 +197,31 @@ if (!checkout) {
     }
   }
 
+  // 用 DSH **自己的** patch 解析器与应用器验证 cordis.patch.yml：
+  // bundle 层就是「读文件 → parseEntryYaml → applyEntryPatches 到 profile 基础树」。
+  // 这一步能抓住官方改动 patch DSL 的情况（我们自己的正则检查抓不到）。
+  const includeLib = `${checkout}/vendor/include/lib/index.js`
+  const bundlePatch = pkg.dsh && pkg.dsh.bundle && pkg.dsh.bundle.patch
+  if (!existsSync(includeLib)) {
+    skip('bundle patch 被 DSH 解析并应用', `${includeLib} 不存在（先在该检出 pnpm run build:lib:host）`)
+  } else if (typeof bundlePatch !== 'string') {
+    check('bundle patch 被 DSH 解析并应用', false, 'dsh.bundle.patch 不是字符串')
+  } else {
+    try {
+      const include = await import(pathToFileURL(includeLib).href)
+      const parsed = include.parseEntryYaml(read(bundlePatch))
+      const warnings = []
+      const tree = include.applyEntryPatches([], parsed, (format, ...args) => warnings.push(`${format} ${args.join(' ')}`))
+      const mine = Array.isArray(tree) ? tree.find((entry) => entry && entry.id === 'memory-manager') : undefined
+      check('bundle patch 被 DSH 自己的 parseEntryYaml + applyEntryPatches 接受（插入行 id/name 正确）',
+        Boolean(mine) && mine.name === pkg.name && warnings.length === 0,
+        mine ? `id=${mine.id} name=${mine.name}` : `tree=${JSON.stringify(tree).slice(0, 140)}${warnings.length ? ' warn=' + warnings.join(' | ') : ''}`)
+    } catch (error) {
+      check('bundle patch 被 DSH 自己的 parseEntryYaml + applyEntryPatches 接受（插入行 id/name 正确）',
+        false, String((error && error.message) || error))
+    }
+  }
+
   const pkgPathOf = (name) => {
     if (name.startsWith('@deepseek-ai/dsh-client-')) return `${checkout}/packages/client/${name.slice('@deepseek-ai/dsh-client-'.length)}`
     if (name.startsWith('@deepseek-ai/dsh-api-')) return `${checkout}/packages/api/${name.slice('@deepseek-ai/dsh-api-'.length)}`

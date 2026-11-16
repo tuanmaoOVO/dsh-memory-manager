@@ -4,6 +4,44 @@
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-11-16
+
+### 适配 DSH 0.2.2-rc.3（跨 608 个提交，含 cordis 4.1 破坏式变更）
+
+核对依据：`dsh-v0.2.1-rc.4 → HEAD`（789 个文件、43870 增 / 21135 删）。**插件业务代码零改动**，但发现并跟进了一处真正的破坏点（在测试里），另新增一项永久的挂载验证。
+
+**唯一破坏点：cordis 4.1.0 改了 `fiber.config` 的语义**
+
+- 4.0.x：`fiber.config` = 解析后的配置（含 `~standard.validate` 产出的 volatile 引用）。
+- 4.1.0：`fiber.config` = **原始输入**；解析结果移到 **`fiber.effectiveConfig`**。内核自己的 volatile 提交也同步改为 `volatileEntries(fiber.effectiveConfig)`（`vendor/loader/src/config/entry.ts`）。
+- 影响：任何直接读 `fiber.config` 的代码会拿到未校验的原始值、取不到任何 volatile 引用（典型症状「配置全是默认值 / 设置改不动」）。
+- 本插件不读 `fiber.config`（只用 `apply(ctx, config)` 的入参，内核传入的就是解析结果），**业务代码无需改动**；`tests/test-cordis-020.mjs` 改为 `fiber.effectiveConfig ?? fiber.config` 双向兼容，并保留 `ctx.fiber.entry?.options.id`（该字段由 `vendor/loader` 的声明合并继续提供，设置命名空间不受影响）。
+
+**preflight 新增一项真机挂载验证（35 → 36 项）**
+
+- 用 DSH 自己的 `vendor/include` 的 `parseEntryYaml` + `applyEntryPatches` 解析并应用 `cordis.patch.yml`，断言插入行 `id: memory-manager` / `name` 正确。这正是 profile 装载 bundle 层时走的代码路径，能抓住官方改动 patch DSL（0.2.2 里 `vendor/include` 重写了 `patch.ts` / `journal.ts`）。本次结果：通过。
+
+**逐项复核（均未变 / 纯增量）**
+
+- 未变：`SESSION_FORMAT_VERSION = 4`；`core/session` 的 `SurfaceOp` 替换规则、`sourceEventSeqs` 覆盖要求、`tool/result` 只改 `content`；`defineTool` / `ctx.tools.register` / `ToolRunContext`；`agent/pre-step`（`EventOptions` 仍支持 `prepend` / `global`）与 `agent/created`；`Agent.inject` / `Agent.steer`；`WebRoute` 与 `webServer.register`；`connection.rpc.intercept(channel, matches, handler)`；`ctx.settings.update`（实现未改）；`GenerateOptions`（含 `maxTokens`）；`sessionQuery.readSurface` / `readTitle`（仍返回 `SessionTitleSnapshot | undefined`）/ `readSession` / `listSessions`；`workspaceRegistry.list()` / `archivedSessionIds`。
+- 客户端未变：`ChatSnapshot { order, nodes, ... }`、`useChat` 仍在 session 标准 props、`data-chat-node-key` / `data-chat-anchor-key` 锚点、`openSession(target)` 与 `selectPanel(null)`、5 个目标插槽仍为 list 型且 `settings.section` 仍由 `ui-settings-general` 声明、`ClientBundleRegistration = DshClientModuleManifest { id, chunk?, factory, meta? }`（我们的 `load({id, factory})` 合法）、`react` 仍在平台 seed 模块表。
+- 纯增量：`dsh.bundle.platforms`（省略=全平台）、`dsh.bundle.listedByDefault`（省略=true）、seed 模块新增 `zod` / `@tanstack/react-virtual` / `ui-dockkit`、`ui-conversation` 的 More 菜单插槽。
+- 版本连带：cordis 4.0.5→4.1.0、loader 1.0.6→1.1.0、schemastery 3.18.5→3.19.0、cosmokit 1.8.6→1.9.0。
+
+**0.2.2 的另一处行为变化：共享 RPC 通道 `/api` 归官方 gateway 独占**
+
+- `packages/api/gateway/src/index.ts` 现在自己调用 `connection.rpc.intercept('/api', ...)`；而 `packages/client/connection/src/rpc-host.ts` 对**同一通道的第二个 interceptor** 抛 `shared RPC channel "/api" already has an interceptor`。
+- 因此 `ctx.connection.rpc.intercept('/api', …)` 这条「标准通道」在 0.2.2+ 实际拿不到。本插件的主通道是 `/_dsh/memory-manager/api`（`webServer` 精确路由，始终可用），客户端也只请求它（`lib/client.js` 的 `API` 常量），**功能不受影响**。
+- `lib/api.js` 的降级日志改得更明确：命中该错误时打印「`/api` 已归官方 gateway 所有，仅使用专属路由，无需处理」，其它错误仍按 `attach skipped` 记录。
+
+**验证**
+
+- `node scripts/preflight.mjs <检出>`：**36 项全过**（`evaluatePluginCompatibility(0.2.2-rc.3)` 放行 + patch 真机应用通过）。
+- `npm test`：preflight + Host apply 回归 + Client 冒烟，全绿。
+- `DSH_ROOT=<检出> npm run test:dsh020`：6 套真实内核契约测试全绿（20 / 13 / 11 / 20 / 12 / 15）。
+
+> 说明：本地检出的 `package.json` 是 `0.2.2-rc.3`，但 `git describe` 显示领先 `dsh-v0.2.2-rc.3` 标签 **608 个提交**（master），因此上述结论覆盖 rc.3 及其后的 master。
+
 ## [0.5.3] - 2026-10-29
 
 ### 适配 DSH 0.2.1-rc.4（无需改代码）

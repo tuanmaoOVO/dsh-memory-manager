@@ -4,7 +4,7 @@
 
 **设计原则（0.5.0 起）**：只依赖 DSH 最稳定的核心扩展点（volatile `Config` / `ctx.settings.update` / `tools` / `agent` 事件 / `webServer` / `sessionQuery`），功能全部自包含实现，官方插件包一律不依赖；官方升级的影响面被压缩为「个别能力降级」，而不是「加载失败」。
 
-> **版本基线**：0.5.3 面向 **DSH 0.2.1-rc.4**（当前最新稳定版）。核对方式是对 `dsh-v0.2.1-rc.2 → dsh-v0.2.1-rc.4` 做逐路径 diff：本文件列出的集成面**没有破坏性变更** —— 只动了 `ui-conversation`（新增 More 菜单插槽 `conversation.session.header.views.actions`、输入层新增 `whenDraftExists`）、`ui-workspace/navigation.ts`（`openSession` 签名不变，内部按草稿策略复用空白会话）、`session-controller` 的客户端会话服务（注释级）与插槽目录（新增 3 个官方槽位）。更早的 `0.2.0-rc.2 → 0.2.1-rc.2` 变更（`engines.dsh` 准入机制、`runtime-context` 保留 kind）已在 0.5.1 跟进。通过 DSH 自带的 `evaluatePluginCompatibility`（对照运行版本 `0.2.1-rc.4`）与 6 套真实内核回归测试。
+> **版本基线**：0.5.4 面向 **DSH 0.2.2-rc.3**。核对方式是对 `dsh-v0.2.1-rc.4 → HEAD`（789 个文件，含 `vendor/cordis` 4.0.5→4.1.0、`vendor/loader` 1.0.6→1.1.0、`vendor/include` 新增 patch/journal、`schemastery` 3.18.5→3.19.0）做逐路径 diff 并对照真实内核回归。**唯一的破坏点**：cordis 4.1 把 `fiber.config` 从「解析后的配置」改成「原始输入」，解析结果移到 `fiber.effectiveConfig`（loader 的 volatile 提交同步改为 `volatileEntries(fiber.effectiveConfig)`）——本插件不读 `fiber.config`（只用 `apply(ctx, config)` 的入参），因此业务代码零改动。其余集成面全部未变：`SESSION_FORMAT_VERSION` 仍为 4、`SurfaceOp` 规则、`defineTool`、`agent/pre-step` 与 `agent/created`、`WebRoute`、`rpc.intercept`、`ChatSnapshot`、消息锚点属性、`openSession` / `selectPanel`、5 个目标插槽、`dsh.client` / `dsh.bundle` 清单形状。通过 DSH 自带的 `evaluatePluginCompatibility`（对照运行版本 `0.2.2-rc.3`）、`parseEntryYaml + applyEntryPatches`（bundle patch 的实机挂载路径）与 6 套真实内核回归测试。
 
 ## 架构总览（ASCII）
 

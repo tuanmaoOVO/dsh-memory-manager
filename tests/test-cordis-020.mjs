@@ -46,6 +46,11 @@ const check = (label, ok, detail = '') => {
   results.push(ok)
 }
 
+// Cordis 4.1.0（DSH 0.2.2 起）把 `fiber.config` 的语义改成「原始输入」，
+// 解析后的配置（含 volatile 引用）移到 `fiber.effectiveConfig`。
+// 旧版本（cordis ≤4.0.x）只有 `fiber.config` 且它就是解析结果，因此这里做双向兼容。
+const effectiveConfigOf = (f) => (f && f.effectiveConfig !== undefined ? f.effectiveConfig : (f ? f.config : undefined))
+
 const FIELDS = ['enabled', 'mode', 'view', 'modelTools', 'libraryPath', 'memoryChars', 'totalChars', 'pinChars', 'autoInjectConvention']
 const ACTIVE = 2
 
@@ -72,9 +77,15 @@ await fiber
 
 check('插件在真实 Cordis 中激活（fiber ACTIVE）', fiber.state === ACTIVE, `state=${fiber.state}`)
 check('运行时 Config 就是插件导出的 schema', fiber.runtime && fiber.runtime.Config === mod.Config)
-check('fiber.config 解出 9 个 volatile 引用',
-  fiber.config !== undefined && FIELDS.every((f) => fiber.config[f] !== undefined && typeof fiber.config[f].get === 'function'),
-  fiber.config ? Object.keys(fiber.config).join(',') : 'undefined')
+check('fiber 解析出的配置含 9 个 volatile 引用（cordis 4.1+ 用 effectiveConfig）',
+  (() => {
+    const cfg = effectiveConfigOf(fiber)
+    return cfg !== undefined && FIELDS.every((f) => cfg[f] !== undefined && typeof cfg[f].get === 'function')
+  })(),
+  (() => {
+    const cfg = effectiveConfigOf(fiber)
+    return cfg ? Object.keys(cfg).join(',') : 'undefined'
+  })())
 check('webServer 路由通过 ctx.inject 注册（真实 Cordis 依赖等待）',
   routes.some((r) => r.kind === 'exact' && r.path === '/_dsh/memory-manager/api'),
   routes.map((r) => r.path).join(','))
@@ -103,7 +114,7 @@ check('初始配置等于 schema 默认值',
 // ---------- 2. 复刻内核 _commitVolatile：候选解析 + 就地提交 ----------
 {
   const candidate = resolveConfig(fiber.runtime, { mode: 'on', view: 'compact', pinChars: 4321, autoInjectConvention: false })
-  const refs = volatileEntries(fiber.config)
+  const refs = volatileEntries(effectiveConfigOf(fiber))
   let updated = 0
   for (const { path, ref } of refs) {
     const source = path.reduce((value, key) => Reflect.get(value, key), candidate)
@@ -112,10 +123,11 @@ check('初始配置等于 schema 默认值',
     updated++
   }
   check('resolveConfig + updateVolatile 就地提交 9 个字段', updated === 9, String(updated))
-  check('fiber.config 读到新值（引用身份不变）',
-    fiber.config.mode.get() === 'on' && fiber.config.view.get() === 'compact'
-    && fiber.config.pinChars.get() === 4321 && fiber.config.autoInjectConvention.get() === false,
-    JSON.stringify({ mode: fiber.config.mode.get(), view: fiber.config.view.get(), pinChars: fiber.config.pinChars.get() }))
+  const cfg = effectiveConfigOf(fiber)
+  check('effectiveConfig 读到新值（引用身份不变）',
+    cfg.mode.get() === 'on' && cfg.view.get() === 'compact'
+    && cfg.pinChars.get() === 4321 && cfg.autoInjectConvention.get() === false,
+    JSON.stringify({ mode: cfg.mode.get(), view: cfg.view.get(), pinChars: cfg.pinChars.get() }))
 }
 
 // ---------- 3. loader/volatile-update 让业务层同步 ----------
@@ -131,7 +143,7 @@ check('初始配置等于 schema 默认值',
 // ---------- 4. 关闭总开关后 API 门控生效（配置真实驱动业务） ----------
 {
   const candidate = resolveConfig(fiber.runtime, { enabled: false })
-  for (const { path, ref } of volatileEntries(fiber.config)) {
+  for (const { path, ref } of volatileEntries(effectiveConfigOf(fiber))) {
     const source = path.reduce((value, key) => Reflect.get(value, key), candidate)
     if (source && typeof source.get === 'function') updateVolatile(ref, source)
   }

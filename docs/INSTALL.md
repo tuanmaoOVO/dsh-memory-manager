@@ -15,14 +15,14 @@ node scripts/preflight.mjs "D:/deepseekagent/LatestVersion/deepseek-harness"
 # 或：DSH_ROOT=<DSH 检出路径> npm run preflight
 ```
 
-**35 项**检查，把「装上后不影响 DSH 本体」变成机械结论（下面是它的检查面，也是本插件的安全边界）。带上检出路径时，它会用 **DSH 自己的准入校验**（`packages/boot/app-boot` 的 `evaluatePluginCompatibility`）跑一遍，并打印对照到的运行版本（例如 `0.2.1-rc.2`）——与 DSH 装载 profile 时对每个 bundle 做的是同一段判定；还会验证「声明了 `engines.dsh` 后 peer 不再参与准入」这一 0.2.1 新规则：
+**36 项**检查，把「装上后不影响 DSH 本体」变成机械结论（下面是它的检查面，也是本插件的安全边界）。带上检出路径时，它会用 **DSH 自己的准入校验**（`packages/boot/app-boot` 的 `evaluatePluginCompatibility`）跑一遍，并打印对照到的运行版本（例如 `0.2.2-rc.3`）——与 DSH 装载 profile 时对每个 bundle 做的是同一段判定；还会验证「声明了 `engines.dsh` 后 peer 不再参与准入」这一 0.2.1 新规则，以及用 `vendor/include` 的 `parseEntryYaml + applyEntryPatches` 实机验证 `cordis.patch.yml` 能被内核挂载：
 
 | 组 | 保证 | 检查项 |
 |---|---|---|
 | A 包自洽 | 装上去能跑，不会因为缺文件把宿主的客户端模块图整体搞坏 | `dsh.bundle.patch` 存在；`exports["."]` / `exports["./client"]` 指向的文件都存在；`files` 白名单覆盖这些文件；运行时依赖已声明；**未声明 `dsh.profile`**（永远不能充当或替换 profile 组合） |
 | B 只增不改 | 只影响自己这一行，不动 profile 里的其它行 | bundle patch **只用 `insert`**（无 `remove` / `replace`）；插入行 `id: memory-manager` + `name` 等于本包名，不覆盖任何既有 id；未预设 `disabled`；**声明 `engines.dsh`（0.2.1+ 的首选兼容性声明，一旦声明即单独决定准入）**、非 `workspace:` 范围、上界排除未验证的 0.3.0；旧内核按 peer 判定时所有 DSH peer 仍为 optional |
 | C 模块与 bundle 形状 | 插件自己的代码出问题，只让插件不可用 | 宿主模块可 import、`inject` 只声明核心服务（缺失即降级）；客户端 bundle 是标准的 `load({id, factory})` 单条顶层语句，工厂体整体包在 try/catch 内且预装惰性 `exports` —— **即使模块体抛错，也只会让这一个条目静默失效，不会中断同一批脚本里的其它插件包** |
-| D 与检出对照 | 不占用、不遮蔽官方的东西，且能被当前版本接纳 | **DSH 权威准入校验放行**（`evaluatePluginCompatibility` 返回 undefined）；**内核确实按 `engines.dsh` 判定**（把 peer 改成不可满足后仍放行）；`dsh.client.inject` 的每个包真实存在且声明 `dsh.client`；5 个目标插槽在 0.2.1 目录中都是 **list 型**（只增不替换）且非 `shadows-shipped-ui`；我们的 entry id 未占用官方已注册 id；6 个模型工具名不与官方工具重名（对照 68 个已发布工具） |
+| D 与检出对照 | 不占用、不遮蔽官方的东西，且能被当前版本接纳 | **DSH 权威准入校验放行**（`evaluatePluginCompatibility` 返回 undefined）；**内核确实按 `engines.dsh` 判定**（把 peer 改成不可满足后仍放行）；**`cordis.patch.yml` 经 DSH 自己的 `parseEntryYaml + applyEntryPatches` 实机插入成功**（能抓住官方改动 patch DSL）；`dsh.client.inject` 的每个包真实存在且声明 `dsh.client`；5 个目标插槽都是 **list 型**（只增不替换）且非 `shadows-shipped-ui`；我们的 entry id 未占用官方已注册 id；6 个模型工具名不与官方工具重名（对照 68 个已发布工具） |
 
 > 不带检出路径时只跑 A/B/C（26 项）。退出码 0 = 通过。
 
@@ -135,21 +135,42 @@ dsh plugin --profile web add link:D:/dshTools/dsh-memory-manager
 
 ## 版本兼容
 
-面向 **DSH 0.2.1-rc.4**（当前最新稳定版），并在 0.2.1-rc.2 / 0.2.0-rc.1 / 0.2.0-rc.2 上复验过；同时保留 **0.1.2-rc.1 → 0.2.1-rc.4** 的降级兼容（客户端会话导航、Chat 数据、消息来源标识、`SurfaceOp` 字段名都有双路径适配，逐条见 [ARCHITECTURE.md「与 DSH 的集成面」](ARCHITECTURE.md#与-dsh-的集成面适配层)）。
+面向 **DSH 0.2.2-rc.3**（当前最新，检出实为 tag 之后 608 个提交的 master），并在 0.2.1-rc.4 / 0.2.1-rc.2 / 0.2.0-rc 系列上复验过；同时保留 **0.1.2-rc.1 → 0.2.2** 的降级兼容（客户端会话导航、Chat 数据、消息来源标识、`SurfaceOp` 字段名都有双路径适配，逐条见 [ARCHITECTURE.md「与 DSH 的集成面」](ARCHITECTURE.md#与-dsh-的集成面适配层)）。
 
 **准入规则（0.2.1 起有变化）**：
 
-- **0.2.1+**：插件 `package.json` 的 `engines.dsh` **一旦声明就单独决定准入**，`peerDependencies` 被内核忽略。本插件声明 `engines.dsh: ">=0.1.2-rc.1 <0.3.0"`（覆盖 rc.3 / rc.4；`0.2.2-alpha` 也在区间内但**尚未验证**，见下）。
+- **0.2.1+**：插件 `package.json` 的 `engines.dsh` **一旦声明就单独决定准入**，`peerDependencies` 被内核忽略。本插件声明 `engines.dsh: ">=0.1.2-rc.1 <0.3.0"`（覆盖 0.2.1 全系与 0.2.2-rc.3）。
 - **0.2.0 及更早**：内核只看 `@deepseek-ai/dsh*` peer。本插件只声明可选的 `@deepseek-ai/dsh-tools`（`>=0.1.0 <0.3.0`）。
 - 两条都声明 → 新旧内核行为一致；不满足时**只会拒绝本 bundle**，不会影响同一 profile 里的其它插件。
 - 可用 `node scripts/preflight.mjs <检出>` 自带确认（它会调用 DSH 自己的 `evaluatePluginCompatibility`）。
+
+### 0.2.2 的破坏式变更（0.5.4 起已适配）
+
+**唯一影响插件作者的一处：cordis 4.1.0 改了 `fiber.config` 的语义。**
+
+- 4.0.x：`fiber.config` 就是**解析后**的配置（含 `~standard.validate` 产出的 volatile 引用）。
+- 4.1.0：`fiber.config` 变成**原始输入**，解析结果移到 **`fiber.effectiveConfig`**；内核自己的 volatile 提交也同步改为 `volatileEntries(fiber.effectiveConfig)`（`vendor/loader/src/config/entry.ts`）。
+- 影响面：**直接读 `fiber.config` 的代码会拿到未经校验的原始值**（通常是 `{}` 或写死的 patch），volatile 引用一个都取不到；表现为「配置读出来全是默认值 / 设置改不动」。
+- 本插件**不读** `fiber.config`（只用 `apply(ctx, config)` 的入参，内核传的就是解析结果），所以业务代码零改动；只有 `tests/test-cordis-020.mjs` 里的断言需要跟着改（现在用 `fiber.effectiveConfig ?? fiber.config` 双向兼容）。
+- `ctx.fiber.entry` 仍然可用（由 `vendor/loader` 的声明合并提供），因此设置命名空间仍取 profile 条目 id。
+
+**其余 0.2.2 变更与本插件无关或为纯增量**：
+
+- 版本连带升级：cordis 4.0.5→**4.1.0**、loader 1.0.6→**1.1.0**、include 重写（新增 `patch.ts` / `journal.ts`）、schemastery 3.18.5→**3.19.0**、cosmokit 1.8.6→**1.9.0**。
+- `dsh.bundle` 清单新增可选 `platforms`（声明后按 `process.platform` 准入，省略=全平台）与 `listedByDefault`（省略=true）。本插件两者都不声明，行为不变。
+- `dsh.client` 清单仍是 `{ platform, inject?, immediately?, external? }`；`ClientBundleRegistration` = `DshClientModuleManifest { id, chunk?, factory, meta? }`，我们的 `load({ id, factory })` 仍然合法；`react` 仍在平台 seed 模块表里（新增 `zod`、`@tanstack/react-virtual`、`ui-dockkit`）。
+- 未变：`SESSION_FORMAT_VERSION` 仍为 **4**、`SurfaceOp` 替换规则、`defineTool` / `ctx.tools.register`、`agent/pre-step` 与 `agent/created`、`Agent.inject/steer`、`WebRoute` 与 `webServer.register`、`ctx.settings.update`、`GenerateOptions`（含 `maxTokens`）、`sessionQuery.readSurface/readTitle/readSession/listSessions`、`workspaceRegistry.list`、`ChatSnapshot`、`data-chat-node-key` / `data-chat-anchor-key` 锚点、`openSession` / `selectPanel`、5 个目标插槽、`settings.section` 仍由 `ui-settings-general` 声明。
+- **共享 RPC 通道 `/api` 归官方 gateway 独占**：`packages/api/gateway` 会调用 `connection.rpc.intercept('/api', …)`，而 `rpc-host.ts` 对同一通道的第二个 interceptor 直接抛 `shared RPC channel "/api" already has an interceptor`。本插件的「标准通道」因此在 0.2.2+ 会被跳过（启动日志写明「`/api` 已归官方 gateway 所有，仅使用专属路由，无需处理」），主通道 `/_dsh/memory-manager/api` 不受影响，客户端也只用它。
+- 工具目录仍是 68 个已发布工具，无重名。
+
+> **本地检出说明**：`D:\deepseekagent\LatestVersion\deepseek-harness` 的 `package.json` 版本是 `0.2.2-rc.3`，但 `git describe` 显示它领先 `dsh-v0.2.2-rc.3` 标签 **608 个提交**（即 master）。上述结论是对 HEAD 做的，因此同时覆盖 rc.3 与之后的 master。
 
 ### 0.2.1-rc.3 / rc.4 的注意
 
 - **rc.3 新增的「更多」菜单是纯增量**：新增根作用域插槽 `conversation.session.header.views.actions`（View 标签行的 More 菜单）、`sidebar.panellist.actions`、`sidebar.right.tab.guide.actions`。本插件不占用它们，`conversation.session.header.actions` 仍渲染在 `ConversationSession.tsx` 头部（View 行与 utilities 之间），`conversation.input.left` 仍渲染在 `InputBar.tsx`。
 - **rc.3 的草稿修复只动客户端输入层**：`ui-conversation` 的 `contract/input.ts` 新增 `whenDraftExists: 'replace' | 'append' | 'keep'`，`ui-workspace` 的 `openSession()` **签名未变**（`openSession(target: SessionTarget): void`），内部改为按草稿策略复用空白会话。本插件只传会话 id，不受影响。
 - **rc.4 的 ACP 诊断修复在 CLI/宿主层**，与插件集成面无关；其余集成点（`core/{session,tools,agent,agent-loop}`、`settings`、`host/webserver`、`llm`、`client/{ui-slots,modules,web,connection}`、`session-query`、`workspace`）两版之间**无源码变更**。
-- **尚未验证**：`0.2.2-alpha.2` 对 `api/session-controller`（新增 `history/` / `state/` / `web/` 控制器、删除 `model-selection-projection.ts`）与 `ui-chat`（`ChatFlow` / `ChatNodeSeat` 等）有较大重构，本插件在该版本上**未做验证**。若要试用 0.2.2+，请先跑 `node scripts/preflight.mjs <该版本检出>` 并留意面板 / 跳转 / 注入是否正常。
+- **0.2.2 已适配**：见上「0.2.2 的破坏式变更」；cordis 4.1 的 `fiber.config` 语义变化不会影响本插件。
 
 ### 0.2.1-rc.2 的三点注意
 

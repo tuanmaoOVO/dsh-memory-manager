@@ -1,6 +1,8 @@
 # 开发指南
 
-面向想要修改、测试或发布本插件的开发者。**0.5.3 起本插件面向 DSH 0.2.1-rc.4**（实测检出：`D:\deepseekagent\LatestVersion\deepseek-harness`，tag `dsh-v0.2.1-rc.4`；对 `dsh-v0.2.1-rc.2 → dsh-v0.2.1-rc.4` 做了逐路径 diff，集成面无破坏性变更，rc.3 的 More 菜单插槽与草稿策略均为增量），同时保留对 0.1.2-rc.1 → 0.2.1-rc.4 的降级兼容；设计原则与迁移要点见 `README.md`「兼容性」章节。Node 需 ≥18（DSH 0.2.x 要求 ^22.19 或 ≥24，测试脚本用到 `structuredClone`）。
+面向想要修改、测试或发布本插件的开发者。**0.5.4 起本插件面向 DSH 0.2.2-rc.3**（实测检出：`D:\deepseekagent\LatestVersion\deepseek-harness`，`package.json` 为 0.2.2-rc.3，`git describe` 领先 `dsh-v0.2.2-rc.3` 标签 608 个提交），同时保留对 0.1.2-rc.1 → 0.2.2 的降级兼容；设计原则与迁移要点见 `README.md`「兼容性」章节。Node 需 ≥18（DSH 0.2.x 要求 ^22.19 或 ≥24，测试脚本用到 `structuredClone`）。
+
+> **0.2.2 的一个坑（写测试时最容易踩）**：cordis 4.1 把 `fiber.config` 改成「原始输入」，解析后的配置（含 volatile 引用）在 `fiber.effectiveConfig`。任何直接读 `fiber.config` 的断言都会拿到 `{}`。`tests/test-cordis-020.mjs` 用 `effectiveConfigOf(fiber)` 做双向兼容，别再退回直接读 `fiber.config`。
 
 ## 目录结构
 
@@ -96,7 +98,7 @@ npm install
 
 ```bash
 npm run preflight                            # 安装前自检（离线 26 项）
-node scripts/preflight.mjs <DSH 检出路径>     # 追加对照 + DSH 权威准入校验（35 项）
+node scripts/preflight.mjs <DSH 检出路径>     # 追加对照 + DSH 权威准入校验（36 项）
 npm test                                     # preflight + Host 集成 + Client 冒烟（无需 DSH 检出）
 DSH_ROOT=<DSH 检出路径> npm run test:dsh020   # 0.2.1 契约六件套
 ```
